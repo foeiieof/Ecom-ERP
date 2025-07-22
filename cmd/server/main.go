@@ -5,10 +5,10 @@ import (
 	"log"
 	"os"
 
-
 	"ecommerce/internal/env"
 	"ecommerce/internal/infrastructure"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
@@ -20,31 +20,53 @@ import (
 )
 
 func main() {
-  envSet := os.Getenv("ENV")
-	if envSet == "" { envSet = "dev" }
+	envSet := os.Getenv("ENV")
+	if envSet == "" {
+		envSet = "dev"
+	}
 
-	logger, _ := zap.NewDevelopment()
+	configLogger := zap.NewDevelopmentConfig()
+	configLogger.EncoderConfig.CallerKey = ""
+	configLogger.EncoderConfig.LevelKey = "level"
+	configLogger.EncoderConfig.TimeKey = "timestamp"
+	configLogger.EncoderConfig.MessageKey = "message"
+	configLogger.EncoderConfig.StacktraceKey = ""
+	configLogger.Encoding = "json"
+
+	logger, _ := configLogger.Build()
 	defer logger.Sync()
 
+	// old before congif
+	// logger, _ := zap.NewDevelopment()
+	// defer logger.Sync()
+
 	cfg, err := env.LoadEnv(envSet, logger)
-	if err != nil { log.Fatal("Failed to load configuration:", err) }
-// Demoinstant - Mongo
-  var mongoDriver infrastructure.MongoDriverMethod = infrastructure.NewMongoClient(logger)  
-  mongoClient,err := mongoDriver.Connect(cfg)
-  if err != nil { logger.Error("Mongo Error:", zap.Error(err)) }
-  defer mongoDriver.Disconnect(mongoClient)
+	if err != nil {
+		log.Fatal("Failed to load configuration:", err)
+	}
 
-	container := infrastructure.NewContainer(cfg, mongoClient,logger)
+	valid := validator.New()
+	// Demoinstant - Mongo
+	var mongoDriver infrastructure.MongoDriverMethod = infrastructure.NewMongoClient(logger)
+	mongoClient, err := mongoDriver.Connect(cfg)
+	if err != nil {
+		logger.Error("Mongo Error:", zap.Error(err))
+	}
+	defer mongoDriver.Disconnect(mongoClient)
 
-  container.InitMiddleware()
-  middlewareConfig := container.Middleware
+	container := infrastructure.NewContainer(cfg, mongoClient, logger, valid)
 
-  container.InitRepositories() 
+	container.InitMiddleware()
+	middlewareConfig := container.Middleware
+
+	container.InitRepositories()
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
-			if e, ok := err.(*fiber.Error); ok { code = e.Code }
+			if e, ok := err.(*fiber.Error); ok {
+				code = e.Code
+			}
 
 			logger.Error("Error:", zap.Error(err))
 
@@ -55,7 +77,6 @@ func main() {
 		DisableStartupMessage: false,
 	})
 
-
 	// Global middleware
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
@@ -64,37 +85,55 @@ func main() {
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
 	}))
 
-	if envSet == "dev" { app.Use(middlewareConfig.Log.ReqLogOriginal())
-	} else { app.Use(middlewareConfig.Log.ReqLogZap()) }
+	if envSet == "dev" {
+		app.Use(middlewareConfig.Log.ReqLogOriginal())
+	} else {
+		app.Use(middlewareConfig.Log.ReqLogZap())
+	}
 
-
-  // app init shopee middleware
+	app.Use(middlewareConfig.Log.TraceLog())
+	// app init shopee middleware
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
-			"message": "Welcome to E-commerce API",
-			"version": cfg.Server.AppVersion,
-			"status":  "running",
-      "environment" : cfg.Server.AppEnv,
+			"message":     "Welcome to E-commerce API",
+			"version":     cfg.Server.AppVersion,
+			"status":      "running",
+			"environment": cfg.Server.AppEnv,
 		})
 	})
 
-  app.Get("/mongo-check" , func (c *fiber.Ctx) error {
-    if err := mongoClient.Ping(context.TODO(), readpref.Primary()); err != nil {
-      return c.JSON(fiber.Map{
-        "message": "MongoDB is not running",
-      })
-    }
-    return c.JSON(fiber.Map{
-      "message": "MongoDB is running",
-    })
-  })
+	app.Get("/test", func(c *fiber.Ctx) error {
+		// requestID := c.Get("X-Request-ID")
+		// req := c.Locals("request_id")
+		// if req == nil {
+		// 	req = "unknown"
+		// }
+		return c.JSON(fiber.Map{
+			"message":              "Welcome to E-commerce API",
+			"version":              cfg.Server.AppVersion,
+			"status":               "running",
+			"environment":          cfg.Server.AppEnv,
+			// "X-healder-request-id": requestID,
+   //     "request_id": req,
+		})
+	})
 
+	app.Get("/mongo-check", func(c *fiber.Ctx) error {
+		if err := mongoClient.Ping(context.TODO(), readpref.Primary()); err != nil {
+			return c.JSON(fiber.Map{
+				"message": "MongoDB is not running",
+			})
+		}
+		return c.JSON(fiber.Map{
+			"message": "MongoDB is running",
+		})
+	})
 
-  // Shopee Middleware
-  app.Use(middlewareConfig.Shopee.Handler())
+	// Shopee Middleware
+	app.Use(middlewareConfig.Shopee.Handler())
 
-  // Prfix declareration
+	// Prfix declareration
 	api := app.Group(cfg.Server.Prefix)
 
 	// Router
@@ -106,7 +145,7 @@ func main() {
 	// router := handler.NewRouterHandler(health, swagger, demo)
 	// router.RegisterHandlers(api)
 
-  container.InitHandlers(api) 
+	container.InitHandlers(api)
 
 	// app.Use(container.OAuthMiddleware.Handler())
 	// Auth routes
@@ -136,7 +175,9 @@ func main() {
 
 	// Start server
 	address := cfg.Server.Host + cfg.Server.Port
-	if err := app.Listen(address); err != nil { log.Fatal("Server failed to start:", err) }
+	if err := app.Listen(address); err != nil {
+		log.Fatal("Server failed to start:", err)
+	}
 }
 
 // validateConfig validates required configuration values

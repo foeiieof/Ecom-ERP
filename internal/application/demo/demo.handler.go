@@ -8,10 +8,10 @@ import (
 )
 
 type DemoHandler struct{
-  db *repository.MongoCollectionRepository
+  db repository.IMongoCollectionRepository
 }
 
-func NewDemoHandler(repo *repository.MongoCollectionRepository) *DemoHandler {
+func NewDemoHandler(repo repository.IMongoCollectionRepository) *DemoHandler {
 	return &DemoHandler{db: repo}
 }
 
@@ -25,7 +25,6 @@ type DemoResponse struct {
 // @Success      200 {object} DemoResponse
 // @Router       /demo [get]
 func (d *DemoHandler) DemoCheck(c *fiber.Ctx) error {
-  // data,err := d.db.ShopeeAuthCollection.GetShopeeAuth("123")
   // if err != nil {
   //   code := fiber.StatusNotFound
   //   return response.ErrorResponse(c, code,"demo router", err)
