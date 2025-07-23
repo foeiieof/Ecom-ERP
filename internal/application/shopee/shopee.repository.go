@@ -12,9 +12,11 @@ import (
 )
 
 // -- ShopeeAuthRepository
+// -- ShopeeAuthResponseRepository
 type ShopeeAuthRepository interface {
 	InitRepository() error
-	GetShopeeAuthByShopId(shopId string) (string, error)
+  CreateShopeeAuth(shopId string, codeID string, accessToken string, refreshToken string) (*ShopeeAuthModel, error) 
+	GetShopeeAuthByShopId(shopId string) (*ShopeeAuthModel, error)
 }
 
 type shopeeAuthRepo struct {
@@ -44,24 +46,38 @@ func (r *shopeeAuthRepo) InitRepository() error {
 	return nil
 }
 
-func (r *shopeeAuthRepo) GetShopeeAuthByShopId(shopId string) (string, error) {
+func (r *shopeeAuthRepo) CreateShopeeAuth(shopId string,codeID string, accessToken string, refreshToken string) (*ShopeeAuthModel, error) {
+  data := &ShopeeAuthModel{
+    ShopID:      shopId,
+    Code:        codeID,
+    AccessToken: accessToken,
+    RefreshToken: refreshToken,
+    ExpiredAt:   time.Now().Add(time.Hour * 4),
+    CreatedBy:   "admin",
+    CreatedAt:   time.Now(),
+  }
+  if _, err := r.db.InsertOne(context.TODO(), data); err != nil {
+    return nil, errors.New("failed to insert shopee auth repository")
+  }
+  return data, nil
+}
 
-	if shopId == "" {
-		return "", errors.New("shopId is required")
-	}
+func (r *shopeeAuthRepo) GetShopeeAuthByShopId(shopId string) (*ShopeeAuthModel, error) {
+
+	if shopId == "" { return nil, errors.New("shopId is required") }
 
 	res := r.db.FindOne(context.TODO(), bson.M{"shop_id": shopId})
 
 	if res.Err() != nil {
-		return "", res.Err()
-	}
+    return nil, errors.New("No Documents" )
+  }
 
 	var data ShopeeAuthModel
+	if err := res.Decode(&data); err != nil { 
+    return nil, err 
+  }
 
-	if err := res.Decode(&data); err != nil {
-		return "", err
-	}
-	return data.AccessToken, nil
+	return &data, nil
 }
 
 // -- ShopeeAuthRequestRepository
@@ -116,6 +132,7 @@ func (r *shopeeAuthRequestRepo) SaveShopeeAuthRequestWithName(partnerId string, 
 type ShopeePartnerRepository interface {
 	InitRepository() error
 	CreateShopeePartner(partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error)
+  GetShopeePartnerByPartnerId(partnerId string) (*ShopeePartnerModel, error)
 }
 type shopeePartnerRepo struct {
 	logger *zap.Logger
@@ -178,6 +195,17 @@ func (r *shopeePartnerRepo) CreateShopeePartner(partnerId string, partnerKey str
 	// 	return nil, errors.New("failed to insert shopee partner")
 	// }
 	// return &data, nil
+}
+
+func (r *shopeePartnerRepo)GetShopeePartnerByPartnerId(partnerId string) (*ShopeePartnerModel, error) {
+ var data ShopeePartnerModel
+
+  filter := bson.M{"partner_id": partnerId}
+  err := r.db.FindOne(context.TODO(), filter).Decode(&data)
+  if err != nil {
+  return nil , errors.New("not found shopee partner")
+  }
+  return &data, nil
 }
 
 // ------------------------------- Repository Template ----------------------------------------------------------

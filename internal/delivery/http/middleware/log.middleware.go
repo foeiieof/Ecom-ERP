@@ -43,7 +43,7 @@ func (m *LogHandler) ReqLogOriginal() fiber.Handler {
 func (m *LogHandler) TraceLog() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		requestID := c.Get("X-Request-ID")
-    m.logger.Info("TraceLog", zap.String("request_id", requestID))
+    // m.logger.Info("TraceLog", zap.String("request_id", requestID))
 		if requestID == "" {
 			requestID = uuid.New().String()
 		}

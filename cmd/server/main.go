@@ -26,7 +26,7 @@ func main() {
 	}
 
 	configLogger := zap.NewDevelopmentConfig()
-	configLogger.EncoderConfig.CallerKey = ""
+	configLogger.EncoderConfig.CallerKey = "caller"
 	configLogger.EncoderConfig.LevelKey = "level"
 	configLogger.EncoderConfig.TimeKey = "timestamp"
 	configLogger.EncoderConfig.MessageKey = "message"
@@ -61,8 +61,11 @@ func main() {
 
 	container.InitRepositories()
 
+  container.InitAdapter()
+
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
+      logger.Error("Error:", zap.Error(err))
 			code := fiber.StatusInternalServerError
 			if e, ok := err.(*fiber.Error); ok {
 				code = e.Code

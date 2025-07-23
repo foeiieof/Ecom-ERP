@@ -3,8 +3,9 @@ package shopee
 import "time"
 
 type ShopeeAuthModel struct {
-	ShopeeID     string    `bson:"shop_id"`
-	AccessToken  string    `bson:"token"`
+	ShopID       string    `bson:"shop_id"`
+  Code         string    `bson:"code"`
+	AccessToken  string    `bson:"access_token"`
 	RefreshToken string    `bson:"refresh_token"`
 	ExpiredAt    time.Time `bson:"expired_at"`
 

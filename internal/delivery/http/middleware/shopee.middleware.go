@@ -29,7 +29,6 @@ func (m ShopeeMiddleware) Handler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 
 		path := c.Path()
-		shopId := c.Query("shopeeId")
 
 		if strings.HasPrefix(path, "/api/v1/shopee") {
 
@@ -48,9 +47,12 @@ func (m ShopeeMiddleware) Handler() fiber.Handler {
 			// 	m.logger.Error("Shopee access token not found")
 			// 	return response.ErrorResponse(c, fiber.StatusUnauthorized, "Shopee access token not found", nil)
 			// }
-			shopeeAccessToken, _ := m.shopeeAuthCollection.GetShopeeAuthByShopId(shopId)
-			if shopeeAccessToken != "" { c.Locals("shopeeAccessToken", shopeeAccessToken) }
-      m.logger.Info("Middleware:", zap.String("path", (path) ))
+
+			// shopeeAccessToken, _ := m.shopeeAuthCollection.GetShopeeAuthByShopId(shopId)
+			//    accessToken := shopeeAccessToken.AccessToken
+
+			// if accessToken != "" { c.Locals("shopeeAccessToken", accessToken) }
+			m.logger.Info("Middleware:", zap.String("path", (path)))
 		}
 
 		return c.Next()

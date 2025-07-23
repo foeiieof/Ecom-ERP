@@ -2,14 +2,15 @@ package infrastructure
 
 import (
 	"context"
+	"ecommerce/internal/adapter"
 	"ecommerce/internal/adapter/repository"
 	"ecommerce/internal/application/demo"
 	"ecommerce/internal/application/health"
 	"ecommerce/internal/application/shopee"
-
-	"ecommerce/internal/application/swagger"
 	"ecommerce/internal/delivery/http/handler"
 	"ecommerce/internal/delivery/http/middleware"
+
+	"ecommerce/internal/application/swagger"
 	"ecommerce/internal/env"
 
 	"github.com/go-playground/validator/v10"
@@ -29,15 +30,20 @@ type Repositories struct {
 	MongoRepository repository.IMongoCollectionRepository
 }
 
+type Adapter struct {
+	ShopeeAdapter adapter.IShopeeService
+}
+
 // Container holds all dependencies
 type Container struct {
 	Config      *env.Config
 	Logger      *zap.Logger
-  Valid       *validator.Validate
+	Valid       *validator.Validate
 	MongoClient *mongo.Client
 
 	Repository *Repositories
 	Middleware *MiddlewareHandle
+	Adapter    *Adapter
 }
 
 func NewContainer(cfg *env.Config, mongo *mongo.Client, logger *zap.Logger, valid *validator.Validate) *Container {
@@ -45,7 +51,7 @@ func NewContainer(cfg *env.Config, mongo *mongo.Client, logger *zap.Logger, vali
 		Config:      cfg,
 		MongoClient: mongo,
 		Logger:      logger,
-    Valid:       valid,
+		Valid:       valid,
 	}
 }
 
@@ -54,17 +60,17 @@ func (c *Container) InitRepositories() {
 
 	db := c.MongoClient.Database(c.Config.DB.ConfigDBName)
 
-  shopeePartnerCollection := db.Collection("shopee_partner")
-  shopeePartner := shopee.NewShopeePartnerRepository(shopeePartnerCollection, c.Logger)
-  shopeePartner.InitRepository()
+	shopeePartnerCollection := db.Collection("shopee_partner")
+	shopeePartner := shopee.NewShopeePartnerRepository(shopeePartnerCollection, c.Logger)
+	shopeePartner.InitRepository()
 
 	shopeeAuthCollection := db.Collection("shopee_shop_auth")
 	shopeeAuth := shopee.NewShopeeAuthRepository(shopeeAuthCollection, c.Logger)
-  shopeeAuth.InitRepository()
+	shopeeAuth.InitRepository()
 
 	shopeeAuthReqCollection := db.Collection("shopee_auth_request")
 	shopeeAuthReq := shopee.NewShopeeAuthRequestRepository(shopeeAuthReqCollection, c.Logger)
-  shopeeAuthReq.InitRepository()
+	shopeeAuthReq.InitRepository()
 
 	c.Repository = &Repositories{
 		MongoRepository: repository.NewMongoCollectionRepository(shopeeAuth, shopeeAuthReq, shopeePartner),
@@ -107,13 +113,19 @@ func (c *Container) InitHandlers(g fiber.Router) {
 
 	shopeeRepo := c.Repository.MongoRepository.ShopeeAuthCollection()
 	shopeeReqRepo := c.Repository.MongoRepository.ShopeeAuthRequestCollection()
-  shopeePartnerRepo := c.Repository.MongoRepository.ShopeePartnerCollection()
+	shopeePartnerRepo := c.Repository.MongoRepository.ShopeePartnerCollection()
 
-	shopeeUsecase := shopee.NewShopeeService(c.Config, c.Logger, shopeeRepo, shopeeReqRepo, shopeePartnerRepo)
+	shopeeUsecase := shopee.NewShopeeService(c.Config, c.Logger, c.Adapter.ShopeeAdapter, shopeeRepo, shopeeReqRepo, shopeePartnerRepo)
 	shopee := shopee.NewShopeeHandler(shopeeUsecase, c.Logger, c.Valid)
 
 	h := handler.NewRouterHandler(health, swagger, demo, shopee)
 	h.RegisterHandlers(g)
+}
+
+func (c *Container) InitAdapter() {
+	shopeeAdapter := adapter.NewShopeeAPI(c.Config.Shopee.ShopeeApiBaseUrl, c.Config.Shopee.ShopeeApiBasePrefix, c.Logger)
+
+	c.Adapter = &Adapter{ShopeeAdapter: shopeeAdapter}
 }
 
 // Close cleans up resources

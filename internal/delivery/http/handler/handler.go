@@ -47,15 +47,19 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
 	shopee := router.Group("/shopee")
 	shopee.Get("/", r.shopeeHandler.GetShopeeAuthByShopId)
 
-	// Prototype :
-	// shopee.Post("/shop/auth_partner",  func(c *fiber.Ctx) error { return c.SendString("OK")} )
-
-  // Generate Link for Auth + add to DB
+	// Generate Link for Auth + add to DB
 	// shopee.Post("/shop/add_auth_partner", r.shopeeHandler.PostShopAuthPartner)
   shopee.Post("/shop/auth_partner", r.shopeeHandler.PostShopAuthPartner)
   shopee.Post("/shop/auth_token",  r.shopeeHandler.PostShopeeTokenAuthPartner)
+
+  shopee.Get("/shop/auth_token/:shopeeShopID",  r.shopeeHandler.GetShopeeTokenAuthPartnerByShopId)
 
   // webhook - auth
   shopee.Get("/webhook/auth_partner/:partnerId", r.shopeeHandler.GetWebHookAuthPartner)
 
 }
+
+// Prototype :
+// shopee.Post("/shop/auth_partner",  func(c *fiber.Ctx) error { return c.SendString("OK")} )
+
+

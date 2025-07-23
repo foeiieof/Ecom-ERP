@@ -2,8 +2,9 @@ package shopee
 
 import "time"
 
-type ShopeeAuth struct {
+type ShopeeAuthEntity struct {
 	ShopID        string
+  Code          string
 	AccessToken   string
 	RefreshToken  string
 	ExpiredAt     time.Time
@@ -14,3 +15,4 @@ type ShopeeAuth struct {
 	MoidifiedAt   time.Time
 	ModifiedBy    string
 }
+
