@@ -3,6 +3,7 @@ package shopee
 import "time"
 
 type ShopeeAuthModel struct {
+  PartnerID    string    `bson:"partner_id"`
 	ShopID       string    `bson:"shop_id"`
   Code         string    `bson:"code"`
 	AccessToken  string    `bson:"access_token"`

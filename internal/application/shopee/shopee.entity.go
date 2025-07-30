@@ -1,18 +1,30 @@
 package shopee
 
-import "time"
+import (
+	"ecommerce/internal/adapter/dto"
+	"time"
+)
 
 type ShopeeAuthEntity struct {
-	ShopID        string
-  Code          string
+	PartnerID     string
+  ShopID        string
+  // Code          string
 	AccessToken   string
 	RefreshToken  string
 	ExpiredAt     time.Time
 
-	CreatedAt     time.Time
-	CreatedBy     string
+	// CreatedAt     time.Time
+	// CreatedBy     string
 
-	MoidifiedAt   time.Time
-	ModifiedBy    string
+	// MoidifiedAt   time.Time
+	// ModifiedBy    string
 }
 
+
+type ShopeeShopListEntity struct {
+    ShopList []dto.IResAuthedShopList 
+} 
+
+type ShopeeOrderListEntity struct {
+    OrderList []dto.IResOrderList
+}

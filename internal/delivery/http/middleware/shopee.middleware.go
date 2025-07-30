@@ -52,7 +52,7 @@ func (m ShopeeMiddleware) Handler() fiber.Handler {
 			//    accessToken := shopeeAccessToken.AccessToken
 
 			// if accessToken != "" { c.Locals("shopeeAccessToken", accessToken) }
-			m.logger.Info("Middleware:", zap.String("path", (path)))
+			// m.logger.Info("Middleware:", zap.String("path", (path)))
 		}
 
 		return c.Next()
