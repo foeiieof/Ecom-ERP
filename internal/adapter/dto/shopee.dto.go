@@ -31,7 +31,10 @@ const (
 type IEnumShopeeOptionsFields string
 const (
   OrderStatus IEnumShopeeOptionsFields = "order_status"
+  TotalAmount IEnumShopeeOptionsFields = "total_amount"
 )
+
+
 
 type IOptionShopeeQuery struct {
   TimeRange IEnumShopeeTimeRange
@@ -114,6 +117,140 @@ type IResGetOrderListByShopIDShopWrapper struct {
 type IResGetOrderListByShopIDShop struct {
 	IResShopeeResponse         // embeds request_id, error, message
 	Response IResGetOrderListByShopIDShopWrapper `json:"response"`
+}
+
+type IResOrderDetailReceiptAddress struct {
+	Name         string `json:"name"`
+	Phone        string `json:"phone"`
+	Town         string `json:"town"`
+	District     string `json:"district"`
+	City         string `json:"city"`
+	State        string `json:"state"`
+	Region       string `json:"region"`
+	Zipcode      string `json:"zipcode"`
+	FullAddress  string `json:"full_address"`
+	VirtualPhone string `json:"virtual_contact_number"`
+}
+
+type IResOrderDetailImage struct {
+	ImageURL string `json:"image_url"`
+}
+
+type IResOrderDetailItem struct {
+	ItemID               int64   `json:"item_id"`
+	ItemName             string  `json:"item_name"`
+	ItemSKU              string  `json:"item_sku"`
+	ModelID              int64   `json:"model_id"`
+	ModelName            string  `json:"model_name"`
+	ModelSKU             string  `json:"model_sku"`
+	ModelQtyPurchased    int     `json:"model_quantity_purchased"`
+	ModelOriginalPrice   float64 `json:"model_original_price"`
+	ModelDiscountedPrice float64 `json:"model_discounted_price"`
+	Wholesale            bool    `json:"wholesale"`
+	Weight               float64 `json:"weight"`
+	AddOnDeal            bool    `json:"add_on_deal"`
+	MainItem             bool    `json:"main_item"`
+	AddOnDealID          int64   `json:"add_on_deal_id"`
+	PromotionType        string  `json:"promotion_type"`
+	PromotionID          int64   `json:"promotion_id"`
+	OrderItemID          int64   `json:"order_item_id"`
+	PromotionGroupID     int     `json:"promotion_group_id"`
+	ImageInfo            IResOrderDetailImage   `json:"image_info"`
+	ProductLocationID    string  `json:"product_location_id"`
+	IsPrescriptionItem   bool    `json:"is_prescription_item"`
+	IsB2COwnedItem       bool    `json:"is_b2c_owned_item"`
+}
+
+type IResOrderDetailPackItem struct {
+	ItemID            int64  `json:"item_id"`
+	ModelID           int64  `json:"model_id"`
+	ModelQuantity     int    `json:"model_quantity"`
+	OrderItemID       int64  `json:"order_item_id"`
+	PromotionGroupID  int    `json:"promotion_group_id"`
+	ProductLocationID string `json:"product_location_id"`
+}
+
+type IResOrderDetailPackage struct {
+	PackageNumber         string      `json:"package_number"`
+	LogisticsStatus       string      `json:"logistics_status"`
+	LogisticsChannelID    int64       `json:"logistics_channel_id"`
+	ShippingCarrier       string      `json:"shipping_carrier"`
+	AllowSelfDesignAWB    bool        `json:"allow_self_design_awb"`
+	ItemList              []IResOrderDetailPackItem  `json:"item_list"`
+	GroupShipmentID       int64       `json:"group_shipment_id"`
+	ParcelChargeableWeight int        `json:"parcel_chargeable_weight"`
+	PackageQueryNumber    string      `json:"package_query_number"`
+	SortingGroup          string      `json:"sorting_group"`
+}
+
+type IResOrderDetailInvoice struct {
+	Number             string  `json:"number"`
+	SeriesNumber       string  `json:"series_number"`
+	AccessKey          string  `json:"access_key"`
+	IssueDate          int64   `json:"issue_date"`
+	TotalValue         float64 `json:"total_value"`
+	ProductsTotalValue float64 `json:"products_total_value"`
+	TaxCode            string  `json:"tax_code"`
+}
+
+type IResOrderListWithDetails struct {
+	OrderSN                 string           `json:"order_sn"`
+	Region                  string           `json:"region"`
+	Currency                string           `json:"currency"`
+	COD                     bool             `json:"cod"`
+	TotalAmount             float64          `json:"total_amount"`
+	PendingTerms            []string         `json:"pending_terms"`
+	OrderStatus             string           `json:"order_status"`
+	ShippingCarrier         string           `json:"shipping_carrier"`
+	PaymentMethod           string           `json:"payment_method"`
+	EstimatedShippingFee    float64          `json:"estimated_shipping_fee"`
+	MessageToSeller         string           `json:"message_to_seller"`
+	CreateTime              int64            `json:"create_time"`
+	UpdateTime              int64            `json:"update_time"`
+	DaysToShip              int              `json:"days_to_ship"`
+	ShipByDate              int64            `json:"ship_by_date"`
+	BuyerUserID             int              `json:"buyer_user_id"`
+	BuyerUsername           string           `json:"buyer_username"`
+	RecipientAddress        IResOrderDetailReceiptAddress `json:"recipient_address"`
+	ActualShippingFee       float64          `json:"actual_shipping_fee"`
+	GoodsToDeclare          bool             `json:"goods_to_declare"`
+	Note                    string           `json:"note"`
+	NoteUpdateTime          int64            `json:"note_update_time"`
+	ItemList                []IResOrderDetailItem         `json:"item_list"`
+	PayTime                 int64            `json:"pay_time"`
+	Dropshipper             string           `json:"dropshipper"`
+	DropshipperPhone        string           `json:"dropshipper_phone"`
+	SplitUp                 bool             `json:"split_up"`
+	BuyerCancelReason       string           `json:"buyer_cancel_reason"`
+	CancelBy                string           `json:"cancel_by"`
+	CancelReason            string           `json:"cancel_reason"`
+	ActualShippingConfirmed bool             `json:"actual_shipping_fee_confirmed"`
+	BuyerCPFID              string           `json:"buyer_cpf_id"`
+	FulfillmentFlag         string           `json:"fulfillment_flag"`
+	PickupDoneTime          int64            `json:"pickup_done_time"`
+	PackageList             []IResOrderDetailPackage      `json:"package_list"`
+	InvoiceData             IResOrderDetailInvoice        `json:"invoice_data"`
+	CheckoutShippingCarrier string           `json:"checkout_shipping_carrier"`
+	ReverseShippingFee      float64          `json:"reverse_shipping_fee"`
+	OrderChargeableWeight   int              `json:"order_chargeable_weight_gram"`
+	PrescriptionImages      []string         `json:"prescription_images"`
+	PrescriptionStatus      int              `json:"prescription_check_status"`
+	EDTFrom                 int64            `json:"edt_from"`
+	EDTTo                   int64            `json:"edt_to"`
+	BookingSN               string           `json:"booking_sn"`
+	AdvancePackage          bool             `json:"advance_package"`
+	ReturnRequestDueDate    int64            `json:"return_request_due_date"`
+}
+
+type IResOrderDetailByOrderSNShopWrapper struct {
+	OrderList  []IResOrderListWithDetails  `json:"order_list"` // parse from response
+}
+
+type IResOrderDetailByOrderSN struct {
+  IResShopeeResponse 
+  Warning  []string `json:"warning"`
+  Response IResOrderDetailByOrderSNShopWrapper `json:"response"`
+
 }
 
 // Reminder Note :

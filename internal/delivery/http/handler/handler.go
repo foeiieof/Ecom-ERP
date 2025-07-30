@@ -58,9 +58,12 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
   shopee.Get("/webhook/auth_partner/:partnerId", r.shopeeHandler.GetWebHookAuthPartner)
 
   shopee.Get("/partner/shop_list/:partnerID", r.shopeeHandler.GetShopeeShopListByPartnerID )
-  shopee.Get("/partner/shop_detail/:shopID", func(c *fiber.Ctx) error { return c.SendString("OK")})
+  // waiting 
+  // shopee.Get("/partner/shop_detail/:shopID", func(c *fiber.Ctx) error { return c.SendString("OK")})
 
   shopee.Get("/shop/order_list/:shopeeShopID", r.shopeeHandler.GetShopeeOrderListByShopID )
+  shopee.Get("/shop/order_detail/:shopeeShopID/:orderSN", r.shopeeHandler.GetShopeeOrderListByShopSN )
+
 }
 
 // Prototype :

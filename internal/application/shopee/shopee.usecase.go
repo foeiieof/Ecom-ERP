@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -34,6 +35,7 @@ type IShopeeService interface {
 
 	// order
 	GetShopeeOrderListByShopID(shopID string, timeType string, timeFrom string, timeTo string, status string, page string, size string) (*ShopeeOrderListEntity, error)
+  GetShopeeOrderDetailByOrderSN(shopID string,orderSN string, pending string, option string) (*ShopeeOrderListWithDetailEntity, error)
 }
 
 type shopeeService struct {
@@ -378,11 +380,19 @@ func (s *shopeeService) GetShopeeShopListByPartnerID(partnerID string) (*[]IResS
 }
 
 func (s *shopeeService) GetShopeeOrderListByShopID(shopID string, timeType string, timeFrom string, timeTo string, status string, page string, size string) (*ShopeeOrderListEntity, error) {
-	shopData, err := s.ShopeeAuthRepository.GetShopeeShopAuthByShopId(shopID)
-	if err != nil {
-		s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeeAuthRepository.GetShopeeShopAuthByShopId error", zap.Error(err))
-		return nil, err
-	}
+	// shopDataRepo, err := s.ShopeeAuthRepository.GetShopeeShopAuthByShopId(shopID)
+	// if err != nil {
+	// 	s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeeAuthRepository.GetShopeeShopAuthByShopId error", zap.Error(err))
+	// 	return nil, err
+	// }
+
+  // accessToken
+  shopData,err := s.GetAccessTokenByShopID(shopID)
+  if err != nil {
+    s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.GetAccessTokenByShopID error", zap.Error(err))
+    return nil, err
+  }
+
 
 	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByPartnerId(shopData.PartnerID)
 	if err != nil {
@@ -427,13 +437,56 @@ func (s *shopeeService) GetShopeeOrderListByShopID(shopID string, timeType strin
 	}
 
 	orderData, err := s.ShopeeAdapter.GetOrderListByShopID(shopData.PartnerID, shopData.AccessToken, shopData.ShopID, genData.Sign, &optsQuery)
-	if err != nil {
-		return nil, err
-	}
+	if err != nil { return nil, err }
   s.Logger.Debug("orderData", zap.Any("orderData", orderData))
 
 	orderList := &ShopeeOrderListEntity{OrderList: orderData.Response.OrderList}
 
 	// return orderData, nil
 	return orderList, nil
+}
+
+
+
+// *** waiting for test
+func (s *shopeeService) GetShopeeOrderDetailByOrderSN(shopID string,orderSN string, pending string, option string) (*ShopeeOrderListWithDetailEntity, error) {
+
+  // accessToken
+  // check shopID through GetAccessTokenByShopID 
+  shopData,err := s.GetAccessTokenByShopID(shopID)
+  if err != nil {
+    s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.GetAccessTokenByShopID error", zap.Error(err))
+    return nil, err
+  }
+
+	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByPartnerId(shopData.PartnerID)
+	if err != nil {
+		s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeePartnerRepository.GetShopeePartnerByPartnerId error", zap.Error(err))
+		return nil, err
+	}
+
+  orderSNList := strings.Split(orderSN, ",")
+  if len(orderSNList) < 1 {
+    return nil, errors.New("orderSN is required")
+  }
+
+  var pendingOpts bool
+  pendingParse,err := strconv.ParseBool(pending)
+  if err != nil { pendingParse = false }
+  pendingOpts = pendingParse
+
+  var optionOpts bool
+  optionParse,err := strconv.ParseBool(option)
+  if err != nil { optionParse = false }
+  optionOpts = optionParse
+
+  orderDetailData, err := s.ShopeeAdapter.GetOrderDetailByOrderSN(
+    partnerData.PartnerID, partnerData.PartnerKey, shopData.AccessToken , shopData.ShopID, orderSNList, pendingOpts, optionOpts)
+  if err != nil { return nil, err }
+
+  s.Logger.Debug("orderDetailData", zap.Any("orderDetailData", orderDetailData))
+
+  orderListWithDetail := &ShopeeOrderListWithDetailEntity{ OrderList: orderDetailData.Response.OrderList, }
+
+  return orderListWithDetail, nil
 }

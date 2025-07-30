@@ -2,6 +2,7 @@ package shopee
 
 import (
 	"ecommerce/internal/delivery/http/response"
+	"fmt"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
@@ -13,46 +14,47 @@ type IShopeeHandler interface {
 	// GetShopeeAuthByShopId(c *fiber.Ctx) error
 	GetWebHookAuthPartner(c *fiber.Ctx) error
 
-  GetShopeeTokenAuthPartnerByShopId(c *fiber.Ctx) error
-	
-  PostShopAuthPartner(c *fiber.Ctx) error
-  PostShopeeTokenAuthPartnerWithCode(c *fiber.Ctx) error
+	GetShopeeTokenAuthPartnerByShopId(c *fiber.Ctx) error
 
-  PostShopeeDemoTemplate(c *fiber.Ctx) error
+	PostShopAuthPartner(c *fiber.Ctx) error
+	PostShopeeTokenAuthPartnerWithCode(c *fiber.Ctx) error
 
-  // Partner IShopeeHandler
-  GetShopeeShopListByPartnerID(c *fiber.Ctx) error 
+	PostShopeeDemoTemplate(c *fiber.Ctx) error
 
-  // Order 
-  GetShopeeOrderListByShopID(c *fiber.Ctx) error
+	// Partner IShopeeHandler
+	GetShopeeShopListByPartnerID(c *fiber.Ctx) error
+
+	// Order
+	GetShopeeOrderListByShopID(c *fiber.Ctx) error
+	GetShopeeOrderListByShopSN(c *fiber.Ctx) error
 }
 
 type shopeeHandler struct {
 	service IShopeeService
 	logger  *zap.Logger
-  valid   *validator.Validate
+	valid   *validator.Validate
 }
 
 func NewShopeeHandler(service IShopeeService, logger *zap.Logger, valid *validator.Validate) IShopeeHandler {
 	return &shopeeHandler{
 		service: service,
 		logger:  logger,
-    valid:   valid,
+		valid:   valid,
 	}
 }
 
 // func (d *shopeeHandler) GetShopeeAuthByShopId(c *fiber.Ctx) error {
-	// data,err := d.shopeeService.GetAccessToken("123")
-	// shopID := c.Params("shopeeShopID")
- //  data,err := d.service.GetAccessToken(shopID)
- //  if err != nil {
- //    return response.ErrorResponse(c, fiber.StatusBadRequest, "", err)
- //  }
-	// // if err != nil {
-	// //   code := fiber.StatusNotFound return response.ErrorResponse(c, code,"demo router", err)
-	// // }
-	// return response.SuccessResponse(c, "demo router", data)
-  // return response.SuccessResponse(c, "demo router", "")
+// data,err := d.shopeeService.GetAccessToken("123")
+// shopID := c.Params("shopeeShopID")
+//  data,err := d.service.GetAccessToken(shopID)
+//  if err != nil {
+//    return response.ErrorResponse(c, fiber.StatusBadRequest, "", err)
+//  }
+// // if err != nil {
+// //   code := fiber.StatusNotFound return response.ErrorResponse(c, code,"demo router", err)
+// // }
+// return response.SuccessResponse(c, "demo router", data)
+// return response.SuccessResponse(c, "demo router", "")
 // }
 
 type TPostShopAuthPartner struct {
@@ -66,32 +68,32 @@ type TPostShopAuthPartner struct {
 func (d *shopeeHandler) PostShopAuthPartner(c *fiber.Ctx) error {
 	// path := c.Path()
 	var reqBody TPostShopAuthPartner
-  var err error
+	var err error
 	if err = c.BodyParser(&reqBody); err != nil {
 		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopAuthPartner", err)
 	}
 
 	// Gen Link
 	dataLink, err := d.service.GenerateAuthLink(reqBody.PartnerName, reqBody.PartnerID, reqBody.PartnerKey)
-  if err != nil {
-    d.logger.Error("service.GenerateAuthLink :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopAuthPartner", err)
-  }
+	if err != nil {
+		d.logger.Error("service.GenerateAuthLink :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopAuthPartner", err)
+	}
 
 	// Save log request to DB
 	_, err = d.service.AddShopeeAuthRequest(reqBody.PartnerID, reqBody.PartnerKey, reqBody.PartnerName, dataLink)
 	if err != nil {
-    d.logger.Error("service.AddShopeeAuthRequest :", zap.Error(err))
+		d.logger.Error("service.AddShopeeAuthRequest :", zap.Error(err))
 		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopAuthPartner", err)
 	}
 
-  _, err = d.service.AddShopeePartner(reqBody.PartnerID, reqBody.PartnerKey, reqBody.PartnerName) 
-  if err != nil {
-    d.logger.Error("service.AddShopeePartner :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopAuthPartner", err)
-  }
+	_, err = d.service.AddShopeePartner(reqBody.PartnerID, reqBody.PartnerKey, reqBody.PartnerName)
+	if err != nil {
+		d.logger.Error("service.AddShopeePartner :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopAuthPartner", err)
+	}
 
-  params := map[string]string{"partner_id": reqBody.PartnerID, "partner_key": reqBody.PartnerKey, "partner_name": reqBody.PartnerName, "link": dataLink}
+	params := map[string]string{"partner_id": reqBody.PartnerID, "partner_key": reqBody.PartnerKey, "partner_name": reqBody.PartnerName, "link": dataLink}
 
 	data := map[string]any{"Status": "POST", "param": params}
 
@@ -112,146 +114,174 @@ func (d *shopeeHandler) GetWebHookAuthPartner(c *fiber.Ctx) error {
 	return response.SuccessResponse(c, "GetWebHookAuthPartner", data)
 }
 
-
 type ReqShopeeTokenAuthPartner struct {
-  PartnerID  string `json:"partner_id" validate:"required"`
-  Code       string `json:"code"       validate:"required"`
-  ShopID     string `json:"shop_id"    validate:"required"`
+	PartnerID string `json:"partner_id" validate:"required"`
+	Code      string `json:"code"       validate:"required"`
+	ShopID    string `json:"shop_id"    validate:"required"`
 }
 
 func (d *shopeeHandler) PostShopeeTokenAuthPartnerWithCode(c *fiber.Ctx) error {
-  
-  var reqBody ReqShopeeTokenAuthPartner
-  if err := c.BodyParser(&reqBody); err != nil {
-    d.logger.Error("handle.PostShopeeTokenAuthPartner : c.BodyParser(&reqBody) :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeTokenAuthPartner", err)
-  }
-  
-  if err := d.valid.Struct(reqBody); err != nil {
-    d.logger.Error("handle.PostShopeeTokenAuthPartner : vilid.Struct(&reqBody) :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeTokenAuthPartner", err)
-  }
 
-  // Generate sign
-  dataGen, err := d.service.CreateAccessAndRefreshTokenByCodeOnAdapter(reqBody.PartnerID, reqBody.ShopID, reqBody.Code)
+	var reqBody ReqShopeeTokenAuthPartner
+	if err := c.BodyParser(&reqBody); err != nil {
+		d.logger.Error("handle.PostShopeeTokenAuthPartner : c.BodyParser(&reqBody) :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeTokenAuthPartner", err)
+	}
 
-  if err != nil {
-    d.logger.Error("handle.PostShopeeTokenAuthPartner : d.service.GetAccessAndRefreshToken :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeTokenAuthPartner", err)
-  }
+	if err := d.valid.Struct(reqBody); err != nil {
+		d.logger.Error("handle.PostShopeeTokenAuthPartner : vilid.Struct(&reqBody) :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeTokenAuthPartner", err)
+	}
 
-  // ShopeeService 
-  return response.SuccessResponse(c, "PostShopeeTokenAuthPartner", dataGen)
+	// Generate sign
+	dataGen, err := d.service.CreateAccessAndRefreshTokenByCodeOnAdapter(reqBody.PartnerID, reqBody.ShopID, reqBody.Code)
+
+	if err != nil {
+		d.logger.Error("handle.PostShopeeTokenAuthPartner : d.service.GetAccessAndRefreshToken :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeTokenAuthPartner", err)
+	}
+
+	// ShopeeService
+	return response.SuccessResponse(c, "PostShopeeTokenAuthPartner", dataGen)
 }
 
 func (d *shopeeHandler) GetShopeeTokenAuthPartnerByShopId(c *fiber.Ctx) error {
-  // data,err := d.shopeeService.GetAccessToken("123")
-  shopID := c.Params("shopeeShopID")
-  if shopID == "" {
-    d.logger.Error("handle.GetShopeeTokenAuthPartnerByShopId:", zap.String("shopId",""))
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : GetShopeeTokenAuthPartnerByShopId", "shopId is required")
-  }
+	// data,err := d.shopeeService.GetAccessToken("123")
+	shopID := c.Params("shopeeShopID")
+	if shopID == "" {
+		d.logger.Error("handle.GetShopeeTokenAuthPartnerByShopId:", zap.String("shopId", ""))
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : GetShopeeTokenAuthPartnerByShopId", "shopId is required")
+	}
 
-  // d.logger.Debug("handle.GetShopeeTokenAuthPartnerByShopId", zap.String("shopId", shopID))
+	// d.logger.Debug("handle.GetShopeeTokenAuthPartnerByShopId", zap.String("shopId", shopID))
 
-  data,err := d.service.GetAccessTokenByShopID(shopID)
-  if err != nil {
-    d.logger.Error("handle.GetShopeeTokenAuthPartnerByShopId : d.service.GetAccessToken :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error()) 
-  }
+	data, err := d.service.GetAccessTokenByShopID(shopID)
+	if err != nil {
+		d.logger.Error("handle.GetShopeeTokenAuthPartnerByShopId : d.service.GetAccessToken :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error())
+	}
 
-  return response.SuccessResponse(c, "shopee router", data)
+	return response.SuccessResponse(c, "shopee router", data)
 }
 
 func (d *shopeeHandler) GetShopeeShopListByPartnerID(c *fiber.Ctx) error {
-  partnerID := c.Params("partnerID")
+	partnerID := c.Params("partnerID")
 
+	data, err := d.service.GetShopeeShopListByPartnerID(partnerID)
+	if err != nil {
+		d.logger.Error("handle.GetShopeeShopListByPartnerID : d.service.GetShopeeShopListByPartnerID :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error())
+	}
 
-  data, err := d.service.GetShopeeShopListByPartnerID(partnerID)
-  if err != nil {
-    d.logger.Error("handle.GetShopeeShopListByPartnerID : d.service.GetShopeeShopListByPartnerID :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error()) 
-  }
-
-  return response.SuccessResponse(c, "GetShopeeShopListByPartnerID", data)
+	return response.SuccessResponse(c, "GetShopeeShopListByPartnerID", data)
 }
 
-type IReqQueryShopeeOrderListByShopID struct{
-  // ShopID string `json:"shopeeShopID" validate:"required"`
-  From   string `json:"from"    query:"from"   validate:"required"`
-  To     string `json:"to"      query:"to"     validate:"required"`
-  Page   string `json:"page"    query:"page"   `
-  Size   string `json:"size"    query:"size"   validate:"required"`
-  Status string `json:"status"  query:"status" `// order_status
-  Type   string `json:"type"    query:"type"   `// creation_time, update_time
+type IReqQueryShopeeOrderListByShopID struct {
+	// ShopID string `json:"shopeeShopID" validate:"required"`
+	From   string `json:"from"    query:"from"   validate:"required"`
+	To     string `json:"to"      query:"to"     validate:"required"`
+	Page   string `json:"page"    query:"page"   `
+	Size   string `json:"size"    query:"size"   validate:"required"`
+	Status string `json:"status"  query:"status" ` // order_status
+	Type   string `json:"type"    query:"type"   ` // creation_time, update_time
 }
 
 func (d *shopeeHandler) GetShopeeOrderListByShopID(c *fiber.Ctx) error {
-  // Params 
-  shopID := c.Params("shopeeShopID")
-  if shopID == "" {
-    return response.ErrorResponse(c, fiber.StatusBadRequest,"shopeeHandle.GetShopeeOrderListByShopID", "shopId is required") }
+	// Params
+	shopID := c.Params("shopeeShopID")
+	if shopID == "" {
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "shopeeHandle.GetShopeeOrderListByShopID", "shopId is required")
+	}
 
-  // Querys
-  typeQuery     := c.Query("type")   // OrderType
-  timeFromQuery := c.Query("from")
-  timeToQuery := c.Query("to")
-  statusQuery := c.Query("status")
-  nextQuery   := c.Query("page") // Cursor
-  sizeQuery   := c.Query("size") // PageSize
+	// Querys
+	typeQuery := c.Query("type") // OrderType
+	timeFromQuery := c.Query("from")
+	timeToQuery := c.Query("to")
+	statusQuery := c.Query("status")
+	nextQuery := c.Query("page") // Cursor
+	sizeQuery := c.Query("size") // PageSize
 
-  // d.logger.Debug("time start day in unix", zap.String("timstamp", strconv.FormatInt( time.Now().Truncate(24*time.Hour).Unix(),10) ) )
-  // d.logger.Debug("time end day in unix", zap.String("timstamp", strconv.FormatInt( time.Now().Truncate(24*time.Hour).Add(23 * time.Hour + 59* time.Minute + 59*time.Second).Unix(),10) ) )
+	// d.logger.Debug("time start day in unix", zap.String("timstamp", strconv.FormatInt( time.Now().Truncate(24*time.Hour).Unix(),10) ) )
+	// d.logger.Debug("time end day in unix", zap.String("timstamp", strconv.FormatInt( time.Now().Truncate(24*time.Hour).Add(23 * time.Hour + 59* time.Minute + 59*time.Second).Unix(),10) ) )
 
-  // check access and refresh
-  _,err := d.service.GetAccessTokenByShopID(shopID)
-  if err != nil {
-    d.logger.Error("handle.GetShopeeOrderListByShopID : d.service.GetAccessToken :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error()) 
-  }
+	// check access and refresh
+	_, err := d.service.GetAccessTokenByShopID(shopID)
+	if err != nil {
+		d.logger.Error("handle.GetShopeeOrderListByShopID : d.service.GetAccessToken :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error())
+	}
 
-  // Valid section
-  var queries IReqQueryShopeeOrderListByShopID
-  if err := c.QueryParser(&queries); err != nil {
-    d.logger.Error("shopeeHandle.GetShopeeOrderListByShopID.c.QueryParser", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "shopeeHandle.GetShopeeOrderListByShopID.c.QueryParser", "Invalid request body") } 
-  if err := d.valid.Struct(queries); err != nil {
-    d.logger.Error("shopeeHandle.GetShopeeOrderListByShopID.queries", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "shopeeHandle.GetShopeeOrderListByShopID.queries", "Invalid request body") }
+	// Valid section
+	var queries IReqQueryShopeeOrderListByShopID
+	if err := c.QueryParser(&queries); err != nil {
+		d.logger.Error("shopeeHandle.GetShopeeOrderListByShopID.c.QueryParser", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "shopeeHandle.GetShopeeOrderListByShopID.c.QueryParser", "Invalid request body")
+	}
+	if err := d.valid.Struct(queries); err != nil {
+		d.logger.Error("shopeeHandle.GetShopeeOrderListByShopID.queries", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "shopeeHandle.GetShopeeOrderListByShopID.queries", "Invalid request body")
+	}
 
+	data, err := d.service.GetShopeeOrderListByShopID(shopID, typeQuery, timeFromQuery, timeToQuery, statusQuery, nextQuery, sizeQuery)
+	if err != nil {
+		d.logger.Error("handle.GetShopeeOrderListByShopID : d.service.GetShopeeOrderListByShopID :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusNotFound, "usecase.GetShopeeOrderListByShopID :", err.Error())
+	}
+	d.logger.Debug("shopeeHandle.GetShopeeOrderListByShopID", zap.Any("data", data))
 
-  data,err := d.service.GetShopeeOrderListByShopID( shopID , typeQuery, timeFromQuery, timeToQuery, statusQuery, nextQuery, sizeQuery )
-  if err != nil {
-    d.logger.Error("handle.GetShopeeOrderListByShopID : d.service.GetShopeeOrderListByShopID :", zap.Error(err))
-    return response.ErrorResponse(c, fiber.StatusNotFound, "usecase.GetShopeeOrderListByShopID :", err.Error() )
-  }
-  d.logger.Debug("shopeeHandle.GetShopeeOrderListByShopID", zap.Any("data", data))
-
-  // GetOrderListByShopID
-  return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopID", data)
+	// GetOrderListByShopID
+	return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopID", data)
 }
 
+func (d *shopeeHandler) GetShopeeOrderListByShopSN(c *fiber.Ctx) error {
+
+	shopIDParam := c.Params("shopeeShopID")
+	orderSNParam := c.Params("orderSN")
+
+	missing := []string{}
+
+	if orderSNParam == "" { missing = append(missing, "orderSN") }
+  if shopIDParam == "" { missing = append(missing, "shopID")    } 
+  if len(missing) > 0 {
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "shopeeHandle.GetShopeeOrderListByShopSN", fmt.Sprintf("%s is required", missing[0]) )
+  } 
+
+	pendingQuery := c.Query("pending")
+	optionQuery := c.Query("option")
+
+	data, err := d.service.GetShopeeOrderDetailByOrderSN(shopIDParam, orderSNParam, pendingQuery, optionQuery)
+	if err != nil {
+		d.logger.Error("handle.GetShopeeOrderListByShopSN : d.service.GetShopeeOrderDetailByShopID :", zap.Error(err))
+		return response.ErrorResponse(c, fiber.StatusNotFound, "usecase.GetShopeeOrderDetailByShopID :", err.Error())
+	}
+
+	d.logger.Debug("shopeeHandle.GetShopeeOrderListByShopSN", zap.Any("data", data))
+
+	// res := orderParams + pendingQuery + optionQuery
+	return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopSN", data)
+}
 
 // ------------------------------------------------- Template -------------------------------------------------------
 // reqInterface  Template
 type IReqShopeeDemoTemplate struct {
-  PartnerID  string `json:"partner_id" validate:"required"`
-  Code       string `json:"code"       validate:"required"`
-  ShopID     string `json:"shop_id"    validate:"required"`
-} 
-// Template
-func (d *shopeeHandler) PostShopeeDemoTemplate(c *fiber.Ctx) error {
-  var reqBody IReqShopeeDemoTemplate
-  if err := c.BodyParser(&reqBody); err != nil {
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeDemoTemplate", err) }
-  if err := d.valid.Struct(reqBody); err != nil {
-    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeDemoTemplate", err) }
-  return response.SuccessResponse(c, "PostShopeeTokenAuthPartner", reqBody)
+	PartnerID string `json:"partner_id" validate:"required"`
+	Code      string `json:"code"       validate:"required"`
+	ShopID    string `json:"shop_id"    validate:"required"`
 }
 
+// Template
+func (d *shopeeHandler) PostShopeeDemoTemplate(c *fiber.Ctx) error {
+	var reqBody IReqShopeeDemoTemplate
+	if err := c.BodyParser(&reqBody); err != nil {
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeDemoTemplate", err)
+	}
+	if err := d.valid.Struct(reqBody); err != nil {
+		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopeeDemoTemplate", err)
+	}
+	return response.SuccessResponse(c, "PostShopeeTokenAuthPartner", reqBody)
+}
 
 // ------------------------------------------------- End - Template --------------------------------------------------
-
 
 // Prototype
 // func(d *shopeeHandler) PostShopAuthPartner(c *fiber.Ctx) error {

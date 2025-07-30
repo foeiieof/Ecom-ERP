@@ -123,8 +123,7 @@ func (c *Container) InitHandlers(g fiber.Router) {
 }
 
 func (c *Container) InitAdapter() {
-	shopeeAdapter := adapter.NewShopeeAPI(c.Config.Shopee.ShopeeApiBaseUrl, c.Config.Shopee.ShopeeApiBasePrefix, c.Logger)
-
+	shopeeAdapter := adapter.NewShopeeAPI(c.Config,c.Config.Shopee.ShopeeApiBaseUrl, c.Config.Shopee.ShopeeApiBasePrefix, c.Logger)
 	c.Adapter = &Adapter{ShopeeAdapter: shopeeAdapter}
 }
 
