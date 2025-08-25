@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"ecommerce/internal/application/auth"
 	"ecommerce/internal/application/demo"
 	"ecommerce/internal/application/health"
 	"ecommerce/internal/application/shopee"
@@ -14,6 +15,7 @@ type RouterHandler struct {
 	swaggerHandler *swagger.SwaggerHandler
 	demoHandler    *demo.DemoHandler
 	shopeeHandler  shopee.IShopeeHandler
+  authHandler    *auth.AuthHandler
 }
 
 func NewRouterHandler(
@@ -29,7 +31,6 @@ func NewRouterHandler(
 		shopeeHandler:  shopee,
 	}
 }
-
 // SWAGGER : init
 // swag init --parseDependency -g internal/delivery/http/handler/handler.go -o internal/docs
 
@@ -42,6 +43,22 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
 
 	demo := router.Group("/demo")
 	demo.Get("/", r.demoHandler.DemoCheck)
+
+
+  // Auth Handler 
+  auth := router.Group("/auth")
+
+  auth.Get("/", r.authHandler.CheckAuth)
+  // auth/login
+  auth.Post("/login", r.authHandler.PostUserAuthLogin )
+  // auth/refresh
+  // auth/logout
+  // auth/register
+  // auth/me
+
+  // auth.Get("/", func(c *fiber.Ctx)error {return c.SendString("ok!")} )
+
+
 
   // Shopee Handle
 	shopee := router.Group("/shopee")
@@ -63,6 +80,8 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
 
   shopee.Get("/shop/order_list/:shopeeShopID", r.shopeeHandler.GetShopeeOrderListByShopID )
   shopee.Get("/shop/order_detail/:shopeeShopID/:orderSN", r.shopeeHandler.GetShopeeOrderListByShopSN )
+
+
 
 }
 

@@ -294,5 +294,37 @@ go test -v ./application/auth
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Support
-
 For support and questions, please open an issue in the repository.
+
+#  Tip 
+InitRepository() : for Create Index on Mongo
+
+Design Repository Layer
+Handler (Fiber) -> DTO (Request/Response) 
+   -> Service (Business Logic) 
+      -> Repository (DB access) 
+         -> Entity (Domain Model)
+
+HTTP Request (JSON)
+   ↓  (Fiber BodyParser)
+req.CreateUserRequest
+   ↓  (Service: map + validate)
+domain.User (Entity)
+   ↓  (Repo: map -> DB schema)
+model.UserModel (Mongo)
+   ↓  (InsertOne)
+MongoDB
+
+MongoDB
+   ↓ (FindOne)
+model.UserModel
+   ↓ (map)
+domain.User
+   ↓ (map to dto)
+dto.UserResponse
+   ↓
+HTTP Response (JSON)
+
+## Concept
+DTO → Entity → Model → insert DB
+Repo return Entity → service map → Response DTO

@@ -111,12 +111,15 @@ func (c *Container) InitHandlers(g fiber.Router) {
 
 	demo := demo.NewDemoHandler(c.Repository.MongoRepository)
 
+  // repositori
 	shopeeRepo := c.Repository.MongoRepository.ShopeeAuthCollection()
 	shopeeReqRepo := c.Repository.MongoRepository.ShopeeAuthRequestCollection()
 	shopeePartnerRepo := c.Repository.MongoRepository.ShopeePartnerCollection()
 
 	shopeeUsecase := shopee.NewShopeeService(c.Config, c.Logger, c.Adapter.ShopeeAdapter, shopeeRepo, shopeeReqRepo, shopeePartnerRepo)
 	shopee := shopee.NewShopeeHandler(shopeeUsecase, c.Logger, c.Valid)
+
+
 
 	h := handler.NewRouterHandler(health, swagger, demo, shopee)
 	h.RegisterHandlers(g)

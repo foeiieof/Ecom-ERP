@@ -226,7 +226,9 @@ func NewShopeePartnerRepository(db *mongo.Collection, log *zap.Logger) ShopeePar
 func (r *shopeePartnerRepo) InitRepository() error {
 
 	requiredIndexes := []mongo.IndexModel{
-		{Keys: bson.D{{Key: "partner_id", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{
+      Keys: bson.D{{Key: "partner_id", Value: 1}}, 
+      Options: options.Index().SetUnique(true)},
 		// {Keys: bson.D{{Key: "shop_id", Value: 1}}, Options: options.Index().SetUnique(true)},
 	}
 

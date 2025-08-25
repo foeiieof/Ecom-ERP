@@ -23,8 +23,17 @@ services:
     volumes:
       - grafana-storage:/var/lib/grafana
 
+  mongo:
+    image: mongo:6.0
+    container_name: monogodb
+    ports: 
+      - "27017:27017"
+    volumes: 
+      - mongo-data:/data/db
+      
 volumes:
   grafana-storage:
+  mongo-data:
 
 # services:
 #   ecommerce-api:

@@ -1,7 +1,7 @@
 package health
 
 import (
-	"fmt"
+	"ecommerce/internal/delivery/http/response"
 
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
@@ -23,8 +23,6 @@ func NewHealthHandler(logger *zap.Logger) *HealthHandler {
 // @Success      200 {object} map[string]string
 // @Router       /health [get]
 func (h *HealthHandler) HealthCheck(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
-		"status":    "healthy",
-		"timestamp": fmt.Sprintf("%d", c.Context().Time().Unix()),
-	})
+	return  response.SuccessResponse(c,"ok!","")
+  // c.JSON(fiber.Map{ "status":    "healthy", "timestamp": fmt.Sprintf("%d", c.Context().Time().Unix()), })
 }
