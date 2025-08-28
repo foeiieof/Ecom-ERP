@@ -179,19 +179,19 @@ func (r *shopeeAuthRequestRepo) SaveShopeeAuthRequestWithName(partnerId string, 
 }
 
 // -- ShopeePartnerRepository
-type ShopeePartnerRepository interface {
-	InitRepository() error
-	CreateShopeePartner(partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error)
-	GetShopeePartnerByPartnerId(partnerId string) (*ShopeePartnerModel, error)
-}
-type shopeePartnerRepo struct {
-	logger *zap.Logger
-	db     *mongo.Collection
-}
+// type ShopeePartnerRepository interface {
+// 	InitRepository() error
+// 	CreateShopeePartner(partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error)
+// 	GetShopeePartnerByPartnerId(partnerId string) (*ShopeePartnerModel, error)
+// }
+// type shopeePartnerRepo struct {
+// 	logger *zap.Logger
+// 	db     *mongo.Collection
+// }
 
-func NewShopeePartnerRepository(db *mongo.Collection, log *zap.Logger) ShopeePartnerRepository {
-	return &shopeePartnerRepo{db: db, logger: log}
-}
+// func NewShopeePartnerRepository(db *mongo.Collection, log *zap.Logger) ShopeePartnerRepository {
+// 	return &shopeePartnerRepo{db: db, logger: log}
+// }
 
 // func (r *shopeePartnerRepo) InitRepository() error {
 // 	indexs := []mongo.IndexModel{
@@ -223,22 +223,22 @@ func NewShopeePartnerRepository(db *mongo.Collection, log *zap.Logger) ShopeePar
 // }
 
 
-func (r *shopeePartnerRepo) InitRepository() error {
+// func (r *shopeePartnerRepo) InitRepository() error {
 
-	requiredIndexes := []mongo.IndexModel{
-		{
-      Keys: bson.D{{Key: "partner_id", Value: 1}}, 
-      Options: options.Index().SetUnique(true)},
-		// {Keys: bson.D{{Key: "shop_id", Value: 1}}, Options: options.Index().SetUnique(true)},
-	}
+// 	requiredIndexes := []mongo.IndexModel{
+// 		{
+//       Keys: bson.D{{Key: "partner_id", Value: 1}}, 
+//       Options: options.Index().SetUnique(true)},
+// 		// {Keys: bson.D{{Key: "shop_id", Value: 1}}, Options: options.Index().SetUnique(true)},
+// 	}
 
-	_, err := r.db.Indexes().CreateMany(context.TODO(), requiredIndexes)
-	if err != nil {
-		r.logger.Error("error creating index", zap.Error(err))
-		return errors.New("ShopeePartnerRepository.InitRepository: failed creating index InitRepository")
-	}
-	r.logger.Info("ShopeePartnerRepository.InitRepository: index created")
-	return nil
+// 	_, err := r.db.Indexes().CreateMany(context.TODO(), requiredIndexes)
+// 	if err != nil {
+// 		r.logger.Error("error creating index", zap.Error(err))
+// 		return errors.New("ShopeePartnerRepository.InitRepository: failed creating index InitRepository")
+// 	}
+// 	r.logger.Info("ShopeePartnerRepository.InitRepository: index created")
+// 	return nil
 	// existingKeys := []bson.D{}
 
 	// cursor, _ := r.db.Indexes().List(context.TODO())
@@ -271,37 +271,37 @@ func (r *shopeePartnerRepo) InitRepository() error {
 	// 	}
 	// }
 
-}
+// }
 
-func (r *shopeePartnerRepo) CreateShopeePartner(partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error) {
+// func (r *shopeePartnerRepo) CreateShopeePartner(partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error) {
 
-	var existing ShopeePartnerModel
+// 	var existing ShopeePartnerModel
 
-	filter := bson.M{"partner_id": partnerId}
-	err := r.db.FindOne(context.TODO(), filter).Decode(&existing)
+// 	filter := bson.M{"partner_id": partnerId}
+// 	err := r.db.FindOne(context.TODO(), filter).Decode(&existing)
 
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			data := &ShopeePartnerModel{
-				PartnerID:   partnerId,
-				PartnerKey:  partnerKey,
-				PartnerName: partnerName,
-				CreatedBy:   "admin",
-				CreatedAt:   time.Now(),
-				MoidifiedAt: time.Now(),
-			}
+// 	if err != nil {
+// 		if errors.Is(err, mongo.ErrNoDocuments) {
+// 			data := &ShopeePartnerModel{
+// 				PartnerID:   partnerId,
+// 				PartnerKey:  partnerKey,
+// 				PartnerName: partnerName,
+// 				CreatedBy:   "admin",
+// 				CreatedAt:   time.Now(),
+// 				MoidifiedAt: time.Now(),
+// 			}
 
-			_, err := r.db.InsertOne(context.TODO(), data)
-			if err != nil {
-				r.logger.Error("Insert failed", zap.String("error", err.Error()))
-				return nil, errors.New("failed to insert")
-			}
-			return data, nil
-		} else {
-			return nil, err
-		}
-	}
-	return &existing, nil
+// 			_, err := r.db.InsertOne(context.TODO(), data)
+// 			if err != nil {
+// 				r.logger.Error("Insert failed", zap.String("error", err.Error()))
+// 				return nil, errors.New("failed to insert")
+// 			}
+// 			return data, nil
+// 		} else {
+// 			return nil, err
+// 		}
+// 	}
+// 	return &existing, nil
 	// if _, err := r.db.InsertOne(context.TODO(), data); err != nil {
 	// 	r.logger.Error("SaveShopeePartner",
 	// 		zap.String("component", "repository.SaveShopeePartner"),
@@ -310,18 +310,18 @@ func (r *shopeePartnerRepo) CreateShopeePartner(partnerId string, partnerKey str
 	// 	return nil, errors.New("failed to insert shopee partner")
 	// }
 	// return &data, nil
-}
+// }
 
-func (r *shopeePartnerRepo) GetShopeePartnerByPartnerId(partnerId string) (*ShopeePartnerModel, error) {
-	var data ShopeePartnerModel
+// func (r *shopeePartnerRepo) GetShopeePartnerByPartnerId(partnerId string) (*ShopeePartnerModel, error) {
+// 	var data ShopeePartnerModel
 
-	filter := bson.M{"partner_id": partnerId}
-	err := r.db.FindOne(context.TODO(), filter).Decode(&data)
-	if err != nil {
-		return nil, errors.New("not found shopee partner")
-	}
-	return &data, nil
-}
+// 	filter := bson.M{"partner_id": partnerId}
+// 	err := r.db.FindOne(context.TODO(), filter).Decode(&data)
+// 	if err != nil {
+// 		return nil, errors.New("not found shopee partner")
+// 	}
+// 	return &data, nil
+// }
 
 // {
 // //   Method() error

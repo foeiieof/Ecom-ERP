@@ -1,12 +1,12 @@
 package auth
 
 import (
-  "go.mongodb.org/mongo-driver/bson/primitive"
-  "github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v5"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type JWTClaims struct {
-    UserID      primitive.ObjectID `json:"user_id"`
+    UserID      bson.ObjectID `json:"user_id"`
     Roles       []string           `json:"roles"`
     Permissions []string           `json:"permissions"`
     jwt.RegisteredClaims

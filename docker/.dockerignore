@@ -34,4 +34,4 @@ test/
 # Build artifacts
 server
 main
-*.exe
+*

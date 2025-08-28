@@ -1,6 +1,22 @@
-package user
+package users
 
 import "time"
+
+//-//go:generate stringer -type=StatusUser with bash go generate ./...
+type StatusUser string  
+
+const (
+  StatusActive StatusUser   = "active"
+  StatusInactive StatusUser = "inactive"
+  StatusLocked StatusUser   = "locked"
+) 
+
+// var stateuser = map[StatusUser]string{
+//   StatusActive : "active",
+//   StatusInactive : "inactive",
+//   StatusLocked : "locked",
+// }
+
 
 type UserEntity struct {
     ID            string
@@ -11,12 +27,12 @@ type UserEntity struct {
     AvatarURL     string
     Roles         []RoleEntity
     Permissions   []PermissionEntity
-    Status        string
+    Status        StatusUser
     IsDeleted     bool
+    TenantID      *string
     CreatedAt     time.Time
     UpdatedAt     time.Time
     LastLoginAt   *time.Time
-    TenantID      *string
 }
 
 type RoleEntity struct {

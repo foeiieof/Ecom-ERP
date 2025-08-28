@@ -1,10 +1,79 @@
 package middleware
 
-// import (
-// 	"ecommerce/domain/auth"
+import (
+	"ecommerce/internal/env"
+	"strings"
+	"time"
 
-// 	"github.com/gofiber/fiber/v2"
-// )
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
+)
+
+type IAuthMiddleware interface {
+  Handler() fiber.Handler
+}
+
+type authMiddleware struct {
+  Config *env.Config
+  Logger *zap.Logger
+}
+
+type AccessAuthEntity struct {
+  Sub      string `json:"sub"`
+  Type     string `json:"type"`
+  Username string `json:"username"`
+  jwt.RegisteredClaims
+} 
+
+func NewAuthMiddleware(cfg *env.Config, lgs *zap.Logger ) IAuthMiddleware {
+  return &authMiddleware{ Config: cfg , Logger: lgs}
+}
+
+func (m *authMiddleware) Handler() fiber.Handler {
+  return  func (c *fiber.Ctx) error {
+    tokenStr := c.Get("Authorization")
+    if tokenStr == "" {
+      return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+        "error": "missing auth",
+      })
+    }
+
+    parse := strings.Split(tokenStr, " ")
+    if len(parse) != 2 || parse[0] != "Bearer" {
+    return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+        "error": "missing auth",
+      })
+    }
+
+    tokenJwt := parse[1]
+    tokenClaims := &AccessAuthEntity{}
+    token,err := jwt.ParseWithClaims(tokenJwt, tokenClaims,func(token *jwt.Token) (interface{} ,error) {
+      if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+        return nil, fiber.NewError(fiber.StatusUnauthorized, "unexpected signing method")
+      }
+      return []byte(m.Config.JWT.AuthJWTSecretKey),nil
+    })
+
+
+    m.Logger.Warn("invalid jwt", zap.Any("", tokenClaims)) 
+
+    if err != nil || !token.Valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{ "error": "invalid or expired token", })
+    }
+
+
+    if tokenClaims.ExpiresAt!=nil&& tokenClaims.ExpiresAt.Before(time.Now()){
+      return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map {"error": "token expired" })
+    }
+
+    // if possible
+    c.Locals("user_id",tokenClaims.Sub)
+    c.Locals("username",tokenClaims.Username)
+    return c.Next()
+  }
+}
+
 
 // // AuthHandler handles authentication endpoints
 // type AuthHandler struct {

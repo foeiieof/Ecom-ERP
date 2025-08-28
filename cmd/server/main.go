@@ -133,7 +133,11 @@ func main() {
 		})
 	})
 
-	// Shopee Middleware
+
+  // Auth Middleware
+	
+  // Shopee Middleware
+  // app.Use(middlewareConfig.Auth.Handler())
 	app.Use(middlewareConfig.Shopee.Handler())
 
 	// Prfix declareration

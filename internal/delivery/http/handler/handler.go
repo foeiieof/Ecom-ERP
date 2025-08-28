@@ -5,36 +5,52 @@ import (
 	"ecommerce/internal/application/demo"
 	"ecommerce/internal/application/health"
 	"ecommerce/internal/application/shopee"
+	"ecommerce/internal/application/shopee/partner"
 	"ecommerce/internal/application/swagger"
+	"ecommerce/internal/application/users"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 type RouterHandler struct {
-	healthHandler  *health.HealthHandler
-	swaggerHandler *swagger.SwaggerHandler
-	demoHandler    *demo.DemoHandler
+  callback       fiber.Handler
+	healthHandler  health.HealthHandler
+	swaggerHandler swagger.SwaggerHandler
+	demoHandler    demo.DemoHandler
 	shopeeHandler  shopee.IShopeeHandler
-  authHandler    *auth.AuthHandler
+  partnerHandler partner.IShopeePartnerHandler
+  authHandler    auth.AuthHandler
+  usersHandle    users.IUserHandler 
+  // userHandle     user.IUserHandler
 }
 
 func NewRouterHandler(
-	health *health.HealthHandler,
-	swagger *swagger.SwaggerHandler,
-	demo *demo.DemoHandler,
-	shopee shopee.IShopeeHandler,
+  fn fiber.Handler,
+	health  health.HealthHandler,
+	swagger swagger.SwaggerHandler,
+	demo    demo.DemoHandler,
+	shopee  shopee.IShopeeHandler,
+  partner partner.IShopeePartnerHandler,
+  auth    auth.AuthHandler,
+  user    users.IUserHandler,
+  // user *user.
 ) *RouterHandler {
 	return &RouterHandler{
+    callback: fn,
 		healthHandler:  health,
 		swaggerHandler: swagger,
 		demoHandler:    demo,
 		shopeeHandler:  shopee,
+    partnerHandler: partner,
+    authHandler: auth,
+    usersHandle: user,
 	}
 }
 // SWAGGER : init
 // swag init --parseDependency -g internal/delivery/http/handler/handler.go -o internal/docs
 
 func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
+
 	health := router.Group("/health")
 	health.Get("/", r.healthHandler.HealthCheck)
 
@@ -44,12 +60,9 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
 	demo := router.Group("/demo")
 	demo.Get("/", r.demoHandler.DemoCheck)
 
-
   // Auth Handler 
   auth := router.Group("/auth")
-
-  auth.Get("/", r.authHandler.CheckAuth)
-  // auth/login
+  // auth.Get("/", r.authHandler.CheckAuth)
   auth.Post("/login", r.authHandler.PostUserAuthLogin )
   // auth/refresh
   // auth/logout
@@ -58,7 +71,15 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
 
   // auth.Get("/", func(c *fiber.Ctx)error {return c.SendString("ok!")} )
 
+  me := router.Group("/user",r.callback)
+  me.Get("/me", r.usersHandle.GetUserMe)
 
+  user := router.Group("/users", r.callback)
+  user.Get("/", r.usersHandle.GetUsers)
+  user.Get("/:userId", r.usersHandle.GetUserByID)
+  user.Post("/", r.usersHandle.CreateUser)
+  user.Patch("/:userId", r.usersHandle.UpdateUserByID) 
+  user.Delete("/:userId", r.usersHandle.DeleteUserByID)
 
   // Shopee Handle
 	shopee := router.Group("/shopee")
@@ -74,6 +95,9 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
   // webhook - auth
   shopee.Get("/webhook/auth_partner/:partnerId", r.shopeeHandler.GetWebHookAuthPartner)
 
+
+  // Crud Shopee Partner
+  shopee.Get("/partner", r.partnerHandler.CreateShopeePartner )
   shopee.Get("/partner/shop_list/:partnerID", r.shopeeHandler.GetShopeeShopListByPartnerID )
   // waiting 
   // shopee.Get("/partner/shop_detail/:shopID", func(c *fiber.Ctx) error { return c.SendString("OK")})
@@ -81,7 +105,8 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
   shopee.Get("/shop/order_list/:shopeeShopID", r.shopeeHandler.GetShopeeOrderListByShopID )
   shopee.Get("/shop/order_detail/:shopeeShopID/:orderSN", r.shopeeHandler.GetShopeeOrderListByShopSN )
 
-
+  // shoperPartner := router.Group("/shopee-partner")
+  // shoperPartner.Get("/", func(c *fiber.Ctx) error { return c.SendString("ok !")} )
 
 }
 

@@ -7,12 +7,16 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type DemoHandler struct{
+type DemoHandler interface {
+  DemoCheck(c *fiber.Ctx) error 
+}
+
+type demoHandler struct{
   db repository.IMongoCollectionRepository
 }
 
-func NewDemoHandler(repo repository.IMongoCollectionRepository) *DemoHandler {
-	return &DemoHandler{db: repo}
+func NewDemoHandler(repo repository.IMongoCollectionRepository) DemoHandler {
+	return &demoHandler{db: repo}
 }
 
 type DemoResponse struct {
@@ -24,7 +28,7 @@ type DemoResponse struct {
 // @Tags         Health 
 // @Success      200 {object} DemoResponse
 // @Router       /demo [get]
-func (d *DemoHandler) DemoCheck(c *fiber.Ctx) error {
+func (d *demoHandler) DemoCheck(c *fiber.Ctx) error {
   // if err != nil {
   //   code := fiber.StatusNotFound
   //   return response.ErrorResponse(c, code,"demo router", err)

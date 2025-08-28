@@ -3,37 +3,53 @@ package auth
 import (
 	"ecommerce/internal/delivery/http/response"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+	"go.uber.org/zap"
 )
 
-type IAuthHandler interface {
+type AuthHandler interface {
   CheckAuth(c *fiber.Ctx) error
 
   PostUserAuthLogin(c *fiber.Ctx) error
 }
 
-type AuthHandler struct { }
+type authHandler struct {
+  service IAuthService  
+  logger  *zap.Logger
+  validate *validator.Validate
 
-func NewAuthHandle() IAuthHandler {
-  return &AuthHandler{}
+}
+
+func NewAuthHandle(src IAuthService, log *zap.Logger, valid *validator.Validate) AuthHandler {
+  return &authHandler{
+    service: src,
+    logger: log,
+    validate: valid,
+  }
 } 
 
-func (d *AuthHandler) CheckAuth(c *fiber.Ctx) error{
-
+func (d *authHandler) CheckAuth(c *fiber.Ctx) error{
   return response.SuccessResponse(c,"check-auth","")
 }
 
 type IReqUserLogin struct {
-  Username string `json:"username"`
-  Password string `json:"password"`
+  Username string `json:"username" validate:"required"`
+  Password string `json:"password" validate:"required"`
 }
 
-func (d *AuthHandler)PostUserAuthLogin(c *fiber.Ctx) error {
-    var req IReqUserLogin
+func (d *authHandler)PostUserAuthLogin(c *fiber.Ctx) error {
+  var req IReqUserLogin
 
-    if err := c.BodyParser(&req); err != nil {
-      return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostUserAuthLogin", err)
-    }
+  if err := c.BodyParser(&req); err != nil {
+    return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostUserAuthLogin", err)
+  }
+
+  if err := d.validate.Struct(req) ; err != nil { return response.ErrorResponse(c, fiber.StatusBadRequest, "handler.PostUserAuthLogin", "Invalidate Body") }
+
+
+  res,err := d.service.GetJwtFromLogin(c.Context(), req.Username, req.Password)
+  if err != nil {return response.ErrorResponse(c,fiber.StatusBadRequest, "handler.PostUserAuthLogin", "username or password invalid")}
 
     // user, perms, err := service.AuthenticateUser(req.Username, req.Password)
     // if err != nil {
@@ -54,5 +70,5 @@ func (d *AuthHandler)PostUserAuthLogin(c *fiber.Ctx) error {
     //     return err
     // }
 
-    return response.SuccessResponse(c,"login-complete", "")
+    return response.SuccessResponse(c,"handler.PostUserAuthLogin", res)
 }

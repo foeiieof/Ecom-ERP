@@ -28,7 +28,8 @@ type DBConfig struct {
   ConfigDBPort     string `env:"CONFIG_DB_PORT" envDefault:"5432"`
   ConfigDBUser     string `env:"CONFIG_DB_USER" envDefault:"root"`
   ConfigDBPassword string `env:"CONFIG_DB_PASSWORD" envDefault:""`
-  ConfigDBName     string `env:"CONFIG_DB_NAME" envDefault:"postgres"`
+  ConfigDBAuthName string `env:"CONFIG_DB_AUTH_NAME" envDefault:"def-auth"`
+  ConfigDBName     string `env:"CONFIG_DB_NAME" envDefault:"def-db"`
 }
 
 type StoreConfig struct {

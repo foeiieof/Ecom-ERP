@@ -1,5 +1,113 @@
 package auth
 
+import (
+	"context"
+	"ecommerce/internal/application/users"
+	"ecommerce/internal/env"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type IAuthService interface {
+  GetJwtFromLogin(ctx context.Context,user string, pssw string) (*AuthWithJwtDTO,error)
+}
+
+type authService struct {
+  Config *env.Config
+  Logger *zap.Logger
+
+  UserRepository users.UserRepository
+}
+
+func NewAuthService(cfg *env.Config, log *zap.Logger,
+  userRepo users.UserRepository,
+) IAuthService {
+  return &authService{
+    Config: cfg,
+    Logger: log,
+    UserRepository: userRepo,
+  }
+}
+
+type AuthWithJwtDTO struct {
+  Username  string `json:"username"`
+  Email     string `json:"email"`
+  FullName  string `json:"full_name"`
+  AccessToken  string `json:"access_token"`
+  RefreshToken string `json:"refresh_token"`
+  TenantID  *string`json:"tenant_id,omitempty"`
+} 
+
+func (s *authService) GetJwtFromLogin(ctx context.Context, user string, pssw string) ( *AuthWithJwtDTO ,error) {
+  // check user
+  userRes, err := s.UserRepository.GetUserDetailByUsername(ctx, user)
+  if err != nil {
+    s.Logger.Info("usecase.GetJwtFromLogin.userRes:" , zap.String("i", err.Error()) )
+    return nil, err
+  }
+
+  s.Logger.Info("usecase.GetJwtFromLogin.userRes:" , zap.String("i", userRes.Email) )
+
+  // check password look the same
+  checkPassword := bcrypt.CompareHashAndPassword([]byte(userRes.PasswordHash), []byte(pssw) )
+  if checkPassword != nil {
+    s.Logger.Info("usecase.GetJwtFromLogin.checkPassword:" , zap.String("",checkPassword.Error())  )
+    return nil , checkPassword
+  }
+
+  // // generate jwt
+  accessClaims := jwt.MapClaims{
+    "sub": userRes.ID,
+    "type": "access",
+    "username": userRes.Username,
+    "iat" : time.Now().Unix(),
+    "exp" : time.Now().Add(time.Hour * 24).Unix(),
+  }
+
+  refreshClaims := jwt.MapClaims{
+    "sub": userRes.ID,
+    "type": "refresh",
+    "username": userRes.Username,
+    "iat" : time.Now().Unix(),
+    "exp" : time.Now().Add(time.Hour * 24 * 30).Unix(),
+  }
+
+  accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+  refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
+
+
+  // // sign token
+  accessTokenString, err := accessToken.SignedString( []byte(s.Config.JWT.AuthJWTSecretKey))
+  if err != nil {
+  s.Logger.Info("usecase.GetJwtFromLogin:", zap.String("jwt:", err.Error()))
+    return nil, err 
+  }
+
+  refreshTokenString, err := refreshToken.SignedString([]byte(s.Config.JWT.AuthJWTSecretKey)) 
+  if err != nil {
+    return nil , err
+  }
+
+  // // stanmp login in User repo 
+  var onTime = time.Now()
+  var loginAt = &users.UserEntity{ Username : user, LastLoginAt: &onTime } 
+  _,errO := s.UserRepository.UpdateUserDetail(ctx, *loginAt)
+  if errO != nil { return nil, err} 
+
+  loginMeta := &AuthWithJwtDTO {
+    Username: userRes.Username,
+    Email: userRes.Email,
+    FullName: userRes.FullName,
+    AccessToken: accessTokenString,
+    RefreshToken: refreshTokenString,
+  }
+
+  return loginMeta, nil
+} 
+
 // import (
 // 	"context"
 // 	"fmt"

@@ -1,10 +1,12 @@
 package shopee
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"ecommerce/internal/adapter"
 	"ecommerce/internal/adapter/dto"
+	"ecommerce/internal/application/shopee/partner"
 	"ecommerce/internal/env"
 	"encoding/hex"
 	"errors"
@@ -20,22 +22,23 @@ import (
 // [Method or Action]:Details
 
 type IShopeeService interface {
-	GetAccessTokenByShopID(shopID string) (*ShopeeAuthEntity, error)
-	GetRefreshTokenOnAdapter(partnerID string, shopID string, refreshToken string) (*ShopeeAuthEntity, error)
-	CreateAccessAndRefreshTokenByCodeOnAdapter(partnerID string, shopID string, code string) (*IResAccessAndRefreshToken, error)
+	GetAccessTokenByShopID(ctx context.Context,shopID string) (*ShopeeAuthEntity, error)
+	GetRefreshTokenOnAdapter(ctx context.Context,partnerID string, shopID string, refreshToken string) (*ShopeeAuthEntity, error)
+	CreateAccessAndRefreshTokenByCodeOnAdapter(ctx context.Context,partnerID string, shopID string, code string) (*IResAccessAndRefreshToken, error)
 
-	GenerateAuthLink(partnerName string, partnerId string, partnerKey string) (string, error)
-	GenerateSignWithPathURL(state string, pathUrl string, partnerID string, partnerKey string, shopID string, code string, accessToken string) (*IGenerateSignWithUri, error)
+	GenerateAuthLink(ctx context.Context,partnerName string, partnerId string, partnerKey string) (string, error)
+	GenerateSignWithPathURL(ctx context.Context,state string, pathUrl string, partnerID string, partnerKey string, shopID string, code string, accessToken string) (*IGenerateSignWithUri, error)
 
 	WebhookAuthentication(partnerId string, code string, shopId string) (any, error)
 
-	AddShopeeAuthRequest(partnerId string, partnerKey string, partnerName string, url string) (*ShopeeAuthRequestModel, error)
-	AddShopeePartner(partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error)
-	GetShopeeShopListByPartnerID(partnerID string) (*[]IResShopeeShopList, error)
+	AddShopeeAuthRequest(ctx context.Context,partnerId string, partnerKey string, partnerName string, url string) (*ShopeeAuthRequestModel, error)
+	// AddShopeePartner(ctx context.Context,partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error)
+	GetShopeeShopListByPartnerID(ctx context.Context,partnerID string) (*[]IResShopeeShopList, error)
 
 	// order
-	GetShopeeOrderListByShopID(shopID string, timeType string, timeFrom string, timeTo string, status string, page string, size string) (*ShopeeOrderListEntity, error)
-  GetShopeeOrderDetailByOrderSN(shopID string,orderSN string, pending string, option string) (*ShopeeOrderListWithDetailEntity, error)
+	GetShopeeOrderListByShopID(ctx context.Context,shopID string, timeType string, timeFrom string, timeTo string, status string, page string, size string) (*ShopeeOrderListEntity, error)
+  GetShopeeOrderDetailByOrderSN(ctx context.Context,shopID string,orderSN string, pending string, option string) (*ShopeeOrderListWithDetailEntity, error)
+
 }
 
 type shopeeService struct {
@@ -46,13 +49,13 @@ type shopeeService struct {
 
 	ShopeeAuthRepository        ShopeeAuthRepository
 	ShopeeAuthRequestRepository ShopeeAuthRequestRepository
-	ShopeePartnerRepository     ShopeePartnerRepository
+	ShopeePartnerRepository     partner.ShopeePartnerRepository
 }
 
 func NewShopeeService(cfg *env.Config, logger *zap.Logger, adapter adapter.IShopeeService,
 	auth ShopeeAuthRepository,
 	authReq ShopeeAuthRequestRepository,
-	shopeePartner ShopeePartnerRepository,
+	shopeePartner partner.ShopeePartnerRepository,
 ) IShopeeService {
 	return &shopeeService{
 		Config:                      cfg,
@@ -64,7 +67,7 @@ func NewShopeeService(cfg *env.Config, logger *zap.Logger, adapter adapter.IShop
 	}
 }
 
-func (s *shopeeService) GetAccessTokenByShopID(shopID string) (*ShopeeAuthEntity, error) {
+func (s *shopeeService) GetAccessTokenByShopID(ctx context.Context,shopID string) (*ShopeeAuthEntity, error) {
 	data, err := s.ShopeeAuthRepository.GetShopeeShopAuthByShopId(shopID)
 	if err != nil {
 
@@ -84,7 +87,7 @@ func (s *shopeeService) GetAccessTokenByShopID(shopID string) (*ShopeeAuthEntity
 	if diffTime.Minutes() < 2 {
 		// GetNew Accessstoken with adapter
     // s.Logger.Debug("diffTime", zap.Any("diffTime", diffTime.Minutes()))
-		accessToken, err := s.GetRefreshTokenOnAdapter(data.PartnerID, data.ShopID, data.RefreshToken)
+		accessToken, err := s.GetRefreshTokenOnAdapter(ctx,data.PartnerID, data.ShopID, data.RefreshToken)
 		if err != nil {
 			return nil, err
 		}
@@ -102,15 +105,15 @@ func (s *shopeeService) GetAccessTokenByShopID(shopID string) (*ShopeeAuthEntity
 	}, nil
 }
 
-func (s *shopeeService) GetRefreshTokenOnAdapter(partnerID string, shopID string, refreshToken string) (*ShopeeAuthEntity, error) {
+func (s *shopeeService) GetRefreshTokenOnAdapter(ctx context.Context,partnerID string, shopID string, refreshToken string) (*ShopeeAuthEntity, error) {
 	// gen log from req
 
-	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByPartnerId(partnerID)
+	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,partnerID)
 	if err != nil {
 		return nil, errors.New("usecase.GetRefreshTokenOnAdapter : Partner_ID not found")
 	}
 
-	dataGen, err := s.GenerateSignWithPathURL("PUBLIC", "/auth/access_token/get", partnerData.PartnerID, partnerData.PartnerKey, shopID, "", "")
+	dataGen, err := s.GenerateSignWithPathURL(ctx,"PUBLIC", "/auth/access_token/get", partnerData.PartnerID, partnerData.SecretKey, shopID, "", "")
 	if err != nil {
 		s.Logger.Error("usecase.GetAccessAndRefreshToken : s.GenerateSignWithPathURL error", zap.Error(err))
 		return nil, errors.New(err.Error())
@@ -142,7 +145,7 @@ func (s *shopeeService) GetRefreshTokenOnAdapter(partnerID string, shopID string
 	}, nil
 }
 
-func (s *shopeeService) GenerateAuthLink(partnerName string, partnerId string, partnerKey string) (string, error) {
+func (s *shopeeService) GenerateAuthLink(ctx context.Context,partnerName string, partnerId string, partnerKey string) (string, error) {
 
 	if partnerName == "" || partnerId == "" || partnerKey == "" {
 		return "", errors.New("partnerName or partnerId or partnerKey is required")
@@ -175,16 +178,14 @@ type IGenerateSignWithUri struct {
 	TimeStamp time.Time
 }
 
-func (s *shopeeService) GenerateSignWithPathURL(state string, pathUrl string, partnerID string, partnerKey string, shopID string, code string, accessToken string) (*IGenerateSignWithUri, error) {
+func (s *shopeeService) GenerateSignWithPathURL(ctx context.Context,state string, pathUrl string, partnerID string, partnerKey string, shopID string, code string, accessToken string) (*IGenerateSignWithUri, error) {
 	// var url string
 	var method string
 	// host := s.Config.Shopee.ShopeeApiBaseUrl
 	timest := strconv.FormatInt(time.Now().Unix(), 10)
 	path := fmt.Sprintf("%s%s", s.Config.Shopee.ShopeeApiBasePrefix, pathUrl)
 	// s.Logger.Sugar().Debugf("adapter.shopee.GenerateSignWithPathURL: %s", path)
-
-	var baseString string
-	// baseString := fmt.Sprintf("%s%s%s", partnerID, path, timest)
+var baseString string // baseString := fmt.Sprintf("%s%s%s", partnerID, path, timest)
 	switch state {
 	case "PUBLIC":
 		// For Public APIs: partner_id, api path, timestamp
@@ -246,7 +247,7 @@ func (s *shopeeService) WebhookAuthentication(partnerId string, code string, sho
 	return map[string]string{"status": "ok", "partner_id": partnerId, "code": code, "shopId": shopId}, nil
 }
 
-func (s *shopeeService) AddShopeeAuthRequest(partnerId string, partnerKey string, partnerName string, url string) (*ShopeeAuthRequestModel, error) {
+func (s *shopeeService) AddShopeeAuthRequest(ctx context.Context,partnerId string, partnerKey string, partnerName string, url string) (*ShopeeAuthRequestModel, error) {
 	data, err := s.ShopeeAuthRequestRepository.SaveShopeeAuthRequestWithName(partnerId, partnerKey, partnerName, url)
 	if err != nil {
 		return nil, errors.New("failed to insert shopee auth request")
@@ -254,13 +255,13 @@ func (s *shopeeService) AddShopeeAuthRequest(partnerId string, partnerKey string
 	return data, nil
 }
 
-func (s *shopeeService) AddShopeePartner(partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error) {
-	data, err := s.ShopeePartnerRepository.CreateShopeePartner(partnerId, partnerKey, partnerName)
-	if err != nil {
-		return nil, errors.New("failed to insert shopee partner")
-	}
-	return data, nil
-}
+// func (s *shopeeService) AddShopeePartner(ctx context.Context,partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error) {
+// 	data, err := s.ShopeePartnerRepository.CreateShopeePartner(ctx,partnerId, )
+// 	if err != nil {
+// 		return nil, errors.New("failed to insert shopee partner")
+// 	}
+// 	return data, nil
+// }
 
 type IResAccessAndRefreshToken struct {
 	AccessToken  string
@@ -268,15 +269,15 @@ type IResAccessAndRefreshToken struct {
 	ExpiredAt    time.Time
 }
 
-func (s *shopeeService) CreateAccessAndRefreshTokenByCodeOnAdapter(partnerID string, shopID string, code string) (*IResAccessAndRefreshToken, error) {
+func (s *shopeeService) CreateAccessAndRefreshTokenByCodeOnAdapter(ctx context.Context,partnerID string, shopID string, code string) (*IResAccessAndRefreshToken, error) {
 
 	// Get partner key
-	partner, err := s.ShopeePartnerRepository.GetShopeePartnerByPartnerId(partnerID)
+	partner, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx ,partnerID)
 	if err != nil {
 		return nil, errors.New(err.Error())
 	}
 
-	dataGen, err := s.GenerateSignWithPathURL("PUBLIC", "/auth/token/get", partner.PartnerID, partner.PartnerKey, shopID, code, "")
+	dataGen, err := s.GenerateSignWithPathURL(ctx,"PUBLIC", "/auth/token/get", partner.PartnerID, partner.SecretKey, shopID, code, "")
 	if err != nil {
 		s.Logger.Error("usecase.GetAccessAndRefreshToken : s.GenerateSignWithPathURL error", zap.Error(err))
 		return nil, errors.New(err.Error())
@@ -333,16 +334,16 @@ type IResShopeeShopList struct {
 	// SipAffiShopList []IResSipAffiShopList `json:"sip_affi_shop_list"`
 }
 
-func (s *shopeeService) GetShopeeShopListByPartnerID(partnerID string) (*[]IResShopeeShopList, error) {
+func (s *shopeeService) GetShopeeShopListByPartnerID(ctx context.Context,partnerID string) (*[]IResShopeeShopList, error) {
 	// Refac
 	// Get partner
-	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByPartnerId(partnerID)
+	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,partnerID)
 	if err != nil {
 		s.Logger.Error("usecase.GetShopeeShopListByPartnerID : s.ShopeePartnerRepository.GetShopeePartnerByPartnerId error", zap.Error(err))
 		return nil, err
 	}
 
-	genData, err := s.GenerateSignWithPathURL("PUBLIC", "/public/get_shops_by_partner", partnerData.PartnerID, partnerData.PartnerKey, "", "", "")
+	genData, err := s.GenerateSignWithPathURL(ctx,"PUBLIC", "/public/get_shops_by_partner", partnerData.PartnerID, partnerData.SecretKey, "", "", "")
 
 	if err != nil {
 		s.Logger.Error("usecase.GetShopeeShopListByPartnerID : s.GenerateSignWithPathURL error", zap.Error(err))
@@ -379,7 +380,7 @@ func (s *shopeeService) GetShopeeShopListByPartnerID(partnerID string) (*[]IResS
 	return &data, nil
 }
 
-func (s *shopeeService) GetShopeeOrderListByShopID(shopID string, timeType string, timeFrom string, timeTo string, status string, page string, size string) (*ShopeeOrderListEntity, error) {
+func (s *shopeeService) GetShopeeOrderListByShopID(ctx context.Context,shopID string, timeType string, timeFrom string, timeTo string, status string, page string, size string) (*ShopeeOrderListEntity, error) {
 	// shopDataRepo, err := s.ShopeeAuthRepository.GetShopeeShopAuthByShopId(shopID)
 	// if err != nil {
 	// 	s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeeAuthRepository.GetShopeeShopAuthByShopId error", zap.Error(err))
@@ -387,21 +388,21 @@ func (s *shopeeService) GetShopeeOrderListByShopID(shopID string, timeType strin
 	// }
 
   // accessToken
-  shopData,err := s.GetAccessTokenByShopID(shopID)
+  shopData,err := s.GetAccessTokenByShopID(ctx,shopID)
   if err != nil {
     s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.GetAccessTokenByShopID error", zap.Error(err))
     return nil, err
   }
 
 
-	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByPartnerId(shopData.PartnerID)
+	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shopData.PartnerID)
 	if err != nil {
 		s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeePartnerRepository.GetShopeePartnerByPartnerId error", zap.Error(err))
 		return nil, err
 	}
 
 	//  ----------- set concurrent
-	genData, err := s.GenerateSignWithPathURL("SHOP", "/order/get_order_list", partnerData.PartnerID, partnerData.PartnerKey, shopData.ShopID, "", shopData.AccessToken)
+	genData, err := s.GenerateSignWithPathURL(ctx,"SHOP", "/order/get_order_list", partnerData.PartnerID, partnerData.SecretKey, shopData.ShopID, "", shopData.AccessToken)
 	if err != nil {
 		s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.GenerateSignWithPathURL error", zap.Error(err))
 		return nil, err
@@ -449,17 +450,17 @@ func (s *shopeeService) GetShopeeOrderListByShopID(shopID string, timeType strin
 
 
 // *** waiting for test
-func (s *shopeeService) GetShopeeOrderDetailByOrderSN(shopID string,orderSN string, pending string, option string) (*ShopeeOrderListWithDetailEntity, error) {
+func (s *shopeeService) GetShopeeOrderDetailByOrderSN(ctx context.Context,shopID string,orderSN string, pending string, option string) (*ShopeeOrderListWithDetailEntity, error) {
 
   // accessToken
   // check shopID through GetAccessTokenByShopID 
-  shopData,err := s.GetAccessTokenByShopID(shopID)
+  shopData,err := s.GetAccessTokenByShopID(ctx,shopID)
   if err != nil {
     s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.GetAccessTokenByShopID error", zap.Error(err))
     return nil, err
   }
 
-	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByPartnerId(shopData.PartnerID)
+	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shopData.PartnerID)
 	if err != nil {
 		s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeePartnerRepository.GetShopeePartnerByPartnerId error", zap.Error(err))
 		return nil, err
@@ -481,7 +482,7 @@ func (s *shopeeService) GetShopeeOrderDetailByOrderSN(shopID string,orderSN stri
   optionOpts = optionParse
 
   orderDetailData, err := s.ShopeeAdapter.GetOrderDetailByOrderSN(
-    partnerData.PartnerID, partnerData.PartnerKey, shopData.AccessToken , shopData.ShopID, orderSNList, pendingOpts, optionOpts)
+    partnerData.PartnerID, partnerData.SecretKey, shopData.AccessToken , shopData.ShopID, orderSNList, pendingOpts, optionOpts)
   if err != nil { return nil, err }
 
   s.Logger.Debug("orderDetailData", zap.Any("orderDetailData", orderDetailData))

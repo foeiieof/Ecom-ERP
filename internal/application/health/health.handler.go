@@ -7,12 +7,16 @@ import (
 	"go.uber.org/zap"
 )
 
-type HealthHandler struct {
+type HealthHandler interface {
+  HealthCheck(c *fiber.Ctx) error
+}
+
+type healthHandler struct {
   logger *zap.Logger
 }
 
-func NewHealthHandler(logger *zap.Logger) *HealthHandler {
-  return &HealthHandler{
+func NewHealthHandler(logger *zap.Logger) HealthHandler {
+  return &healthHandler{
     logger: logger,
   }
 }
@@ -21,8 +25,8 @@ func NewHealthHandler(logger *zap.Logger) *HealthHandler {
 // @Description  Check system status
 // @Tags         Health
 // @Success      200 {object} map[string]string
-// @Router       /health [get]
-func (h *HealthHandler) HealthCheck(c *fiber.Ctx) error {
+// @Router       /api/v1/health [get]
+func (h *healthHandler) HealthCheck(c *fiber.Ctx) error {
 	return  response.SuccessResponse(c,"ok!","")
   // c.JSON(fiber.Map{ "status":    "healthy", "timestamp": fmt.Sprintf("%d", c.Context().Time().Unix()), })
 }
