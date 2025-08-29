@@ -2,6 +2,7 @@ package auth
 
 import (
 	"ecommerce/internal/delivery/http/response"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
@@ -12,6 +13,7 @@ type AuthHandler interface {
   CheckAuth(c *fiber.Ctx) error
 
   PostUserAuthLogin(c *fiber.Ctx) error
+  PostUserAuthRefresh(c *fiber.Ctx) error
 }
 
 type authHandler struct {
@@ -70,5 +72,22 @@ func (d *authHandler)PostUserAuthLogin(c *fiber.Ctx) error {
     //     return err
     // }
 
+    // Test to Set Coockie
+    c.Cookie(&fiber.Cookie{
+    Name: "refresh_token",
+    Value: res.RefreshToken,
+    Expires: time.Now().Add(time.Hour * 24 * 7 ),
+    HTTPOnly: true,
+    Secure: true,
+    SameSite: "Strict",
+    Path: "/api/v1/auth/refresh"}) 
+
     return response.SuccessResponse(c,"handler.PostUserAuthLogin", res)
+}
+
+func (d *authHandler)PostUserAuthRefresh(c *fiber.Ctx) error {
+
+  refreshToken := c.Cookies("refresh_token")
+
+  return response.SuccessResponse(c,"handler.PostUserAuthRefresh", refreshToken)
 }

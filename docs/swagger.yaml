@@ -1,0 +1,59 @@
+basePath: /api/v1
+definitions:
+  ecommerce_internal_delivery_http_response.APIResponse-internal_application_health_Account:
+    properties:
+      data:
+        $ref: '#/definitions/internal_application_health.Account'
+      error: {}
+      message:
+        type: string
+      request_id:
+        type: string
+      success:
+        type: boolean
+      timestamp_local:
+        type: string
+      timestamp_unix:
+        type: integer
+      timestamp_utc:
+        type: string
+    type: object
+  internal_application_health.Account:
+    type: object
+info:
+  contact:
+    email: support@cc1981.com
+    name: API Support
+    url: http://www.cc1981.com/support
+  description: This is the API documentation for CC1981 ERP
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: CC1981 ERP API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: name search by q
+        format: email
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ecommerce_internal_delivery_http_response.APIResponse-internal_application_health_Account'
+            type: array
+      summary: List accounts
+      tags:
+      - accounts
+swagger: "2.0"

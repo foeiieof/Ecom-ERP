@@ -13,11 +13,24 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 
-	_ "ecommerce/internal/docs"
+	_ "ecommerce/docs"
 
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"go.uber.org/zap"
 )
+
+// bash :  swag init -g cmd/server/main.go -d . --parseDependency --par seInternal  
+
+// @title CC1981 ERP API
+// @version 1.0
+// @description This is the API documentation for CC1981 ERP
+// @termsOfService http://swagger.io/terms/
+// @contact.name API Support
+// @contact.url http://www.cc1981.com/support
+// @contact.email support@cc1981.com
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+// @BasePath /api/v1
 
 func main() {
 	envSet := os.Getenv("ENV")

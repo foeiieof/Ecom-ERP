@@ -23,11 +23,6 @@ type DemoResponse struct {
 	Status    string `json:"status"`
 }
 
-// @Summary      Demo check
-// @Description  Check system status
-// @Tags         Health 
-// @Success      200 {object} DemoResponse
-// @Router       /demo [get]
 func (d *demoHandler) DemoCheck(c *fiber.Ctx) error {
   // if err != nil {
   //   code := fiber.StatusNotFound

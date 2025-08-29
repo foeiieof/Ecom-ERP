@@ -56,7 +56,7 @@ func (m *authMiddleware) Handler() fiber.Handler {
     })
 
 
-    m.Logger.Warn("invalid jwt", zap.Any("", tokenClaims)) 
+    // m.Logger.Warn("invalid jwt", zap.Any("", tokenClaims)) 
 
     if err != nil || !token.Valid {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{ "error": "invalid or expired token", })

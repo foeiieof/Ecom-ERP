@@ -1,0 +1,88 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "This is the API documentation for CC1981 ERP",
+        "title": "CC1981 ERP API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "http://www.cc1981.com/support",
+            "email": "support@cc1981.com"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
+        "version": "1.0"
+    },
+    "basePath": "/api/v1",
+    "paths": {
+        "/health": {
+            "get": {
+                "description": "get accounts",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "List accounts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "email",
+                        "description": "name search by q",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/ecommerce_internal_delivery_http_response.APIResponse-internal_application_health_Account"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "ecommerce_internal_delivery_http_response.APIResponse-internal_application_health_Account": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_application_health.Account"
+                },
+                "error": {},
+                "message": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp_local": {
+                    "type": "string"
+                },
+                "timestamp_unix": {
+                    "type": "integer"
+                },
+                "timestamp_utc": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_application_health.Account": {
+            "type": "object"
+        }
+    }
+}

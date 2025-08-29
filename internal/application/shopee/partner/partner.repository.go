@@ -16,6 +16,7 @@ type ShopeePartnerModel struct {
   PartnerName string        `bson:"partner_name"`
   PartnerID   string        `bson:"partner_id"`
   SecretKey   string        `bson:"secret_key"`
+  Validate    bool          `bson:"validate"`
   CreatedAt   time.Time     `bson:"created_at"`
   CreatedBy   string        `bson:"created_by"`
   UpdatedAt   time.Time     `bson:"updated_at"`
@@ -26,7 +27,8 @@ type ShopeePartnerEntity struct {
   ID          string
   PartnerName string        
   PartnerID   string      
-  SecretKey   string          
+  SecretKey   string         
+  Validate    bool
   CreatedAt   time.Time
   CreatedBy   string
   UpdatedAt   time.Time
@@ -34,14 +36,15 @@ type ShopeePartnerEntity struct {
 }
 
 type ShopeePartnerDTO struct {
-  ID          string
-  PartnerName string        
-  PartnerID   string        
-  SecretKey   string
-  CreatedAt   time.Time
-  CreatedBy   string
-  UpdatedAt   time.Time
-  UpdatedBy   string
+  ID          string    `json:"_id"` 
+  PartnerName string    `json:"partner_name"`
+  PartnerID   string    `json:"partner_id"`       
+  SecretKey   string    `json:"secret_key"`
+  Validate    bool      `json:"validate"`
+  CreatedAt   time.Time `json:"created_at"`
+  CreatedBy   string    `json:"created_by"`
+  UpdatedAt   time.Time `json:"updated_at"`
+  UpdatedBy   string    `json:"updated_by"`
 }
 
 func ShopeePartnerModelToEntity(model ShopeePartnerModel) *ShopeePartnerEntity {
@@ -50,6 +53,7 @@ func ShopeePartnerModelToEntity(model ShopeePartnerModel) *ShopeePartnerEntity {
     PartnerName: model.PartnerName,
     PartnerID: model.PartnerID,
     SecretKey: model.SecretKey,
+    Validate:  model.Validate,
     CreatedAt: model.CreatedAt,
     UpdatedAt: model.UpdatedAt,
     CreatedBy: model.CreatedBy,
@@ -63,6 +67,7 @@ func ShopeePartnerEntityToDTO(enti ShopeePartnerEntity) *ShopeePartnerDTO {
     PartnerID: enti.PartnerID,
     PartnerName: enti.PartnerName,
     SecretKey: enti.SecretKey,
+    Validate:  enti.Validate,
     CreatedAt: enti.CreatedAt,
     CreatedBy: enti.CreatedBy,
     UpdatedAt: enti.UpdatedAt,
@@ -73,7 +78,7 @@ func ShopeePartnerEntityToDTO(enti ShopeePartnerEntity) *ShopeePartnerDTO {
 func ShopeePartnerEntityToModel(enti ShopeePartnerEntity) *ShopeePartnerModel{
   modelId := bson.NewObjectID()
   if enti.ID != "" {
-    if ok,err := bson.ObjectIDFromHex(enti.PartnerID); err == nil {
+    if ok,err := bson.ObjectIDFromHex(enti.ID); err == nil {
       modelId = ok 
     } 
   }
@@ -83,6 +88,7 @@ func ShopeePartnerEntityToModel(enti ShopeePartnerEntity) *ShopeePartnerModel{
     PartnerID: enti.PartnerID,
     PartnerName: enti.PartnerName,
     SecretKey: enti.SecretKey,
+    Validate:  enti.Validate,
     CreatedAt: enti.CreatedAt,
     UpdatedAt: enti.UpdatedAt,
     CreatedBy: enti.CreatedBy,
@@ -96,6 +102,7 @@ func ShopeePartnerDTOToEntity(dto ShopeePartnerDTO) *ShopeePartnerEntity {
     PartnerID: dto.PartnerID,
     PartnerName: dto.PartnerName,
     SecretKey: dto.SecretKey,
+    Validate:  dto.Validate,
     CreatedAt: dto.CreatedAt,
     UpdatedAt: dto.UpdatedAt,
     CreatedBy: dto.CreatedBy,
@@ -106,9 +113,10 @@ func ShopeePartnerDTOToEntity(dto ShopeePartnerDTO) *ShopeePartnerEntity {
 
 type ShopeePartnerRepository interface {
   InitRepository() (error)
-  CreateShopeePartner (ctx context.Context,partner ShopeePartnerEntity) (*ShopeePartnerEntity,error)
+  CreateShopeePartner (ctx context.Context,partner *ShopeePartnerEntity) (*ShopeePartnerEntity,error)
+  GetAllShopeePartner (ctx context.Context) ([]ShopeePartnerEntity, error)
   GetShopeePartnerByID(ctx context.Context,partner string)  (*ShopeePartnerEntity,error)
-  UpdateShopeePartner (ctx context.Context,partner ShopeePartnerEntity)   (*ShopeePartnerEntity,error)
+  UpdateShopeePartner (ctx context.Context,partner *ShopeePartnerEntity)   (*ShopeePartnerEntity,error)
   DeleteShopeePartner (ctx context.Context,partner string) (*ShopeePartnerEntity, error)
 }
 
@@ -132,18 +140,43 @@ func (r *shopeePartner)InitRepository() error {
 
 // func 
 
-func (r *shopeePartner)CreateShopeePartner (ctx context.Context,partner ShopeePartnerEntity) (*ShopeePartnerEntity,error) {
+func (r *shopeePartner)CreateShopeePartner (ctx context.Context,partner *ShopeePartnerEntity) (*ShopeePartnerEntity,error) {
 
-  partnerCreate := ShopeePartnerEntityToModel(partner)
-  res,err := r.DB.InsertOne(ctx, partnerCreate)
-  if err != nil { return nil, err }
+  // object := ShopeePartnerEntity{ PartnerID: partner.PartnerID, PartnerName: partner.PartnerName, SecretKey: partner.SecretKey}
+  object := ShopeePartnerEntityToModel(*partner) 
+
+  // partnerCreate := ShopeePartnerEntityToModel(object)
+  res,err := r.DB.InsertOne(ctx, object)
+  if err != nil {
+    if mongo.IsDuplicateKeyError(err){
+      return nil, errors.New("duplicate partner_id:"+object.PartnerID )
+    }
+    return nil, err 
+  }
 
   if oid, ok := res.InsertedID.(bson.ObjectID) ; !ok {
-  partnerCreate.ID = oid     }
+  object.ID = oid     }
 
-  partnerParse := ShopeePartnerModelToEntity(*partnerCreate)
+  partnerParse := ShopeePartnerModelToEntity(*object)
   
   return partnerParse,nil
+}
+
+func (r *shopeePartner)GetAllShopeePartner (ctx context.Context) ([]ShopeePartnerEntity, error) {
+  var res []ShopeePartnerModel
+
+  cursor ,err := r.DB.Find(ctx,bson.M{})
+  if err != nil {return nil ,err}
+  defer cursor.Close(ctx)
+
+  if err := cursor.All(ctx, &res); err != nil { return nil,err }
+
+  resEntity := make([]ShopeePartnerEntity, len(res))
+  for i, u := range res {
+    resEntity[i] = *ShopeePartnerModelToEntity(u)
+  }
+
+  return resEntity, nil
 }
 
 func (r *shopeePartner)GetShopeePartnerByID(ctx context.Context,partner string)  (*ShopeePartnerEntity,error){
@@ -152,16 +185,18 @@ func (r *shopeePartner)GetShopeePartnerByID(ctx context.Context,partner string) 
   err := r.DB.FindOne(ctx, filter).Decode(&model)
   if err != nil {
     if errors.Is(err, mongo.ErrNoDocuments) { 
-      return nil,mongo.ErrNoDocuments  
+      return nil, errors.New("partnerID not found")  
     }
     return nil, err
   }
   resParse := ShopeePartnerModelToEntity(model)
   return resParse, nil
 }
-func (r *shopeePartner)UpdateShopeePartner (ctx context.Context,partner ShopeePartnerEntity)   (*ShopeePartnerEntity,error) {
+
+func (r *shopeePartner)UpdateShopeePartner (ctx context.Context,partner *ShopeePartnerEntity)   (*ShopeePartnerEntity,error) {
   var updated ShopeePartnerModel
-  update := ShopeePartnerEntityToModel(partner)
+  update := ShopeePartnerEntityToModel(*partner)
+  update.UpdatedAt = time.Now()
 
   filter := bson.M{"partner_id": update.PartnerID}
   opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
@@ -177,6 +212,8 @@ func (r *shopeePartner)UpdateShopeePartner (ctx context.Context,partner ShopeePa
   updatedParse := ShopeePartnerModelToEntity(updated)
   return updatedParse,nil
 }
+
+
 func (r *shopeePartner)DeleteShopeePartner (ctx context.Context,partner string) (*ShopeePartnerEntity, error) {
   var deleted ShopeePartnerModel
   
@@ -184,7 +221,7 @@ func (r *shopeePartner)DeleteShopeePartner (ctx context.Context,partner string) 
   err := r.DB.FindOneAndDelete(ctx,filter).Decode(&deleted)
   if err != nil {
     if errors.Is(err, mongo.ErrNoDocuments) {
-      return nil, mongo.ErrNoDocuments
+      return nil, errors.New("ShopeePartner not found")
     }
     return nil, err
   }

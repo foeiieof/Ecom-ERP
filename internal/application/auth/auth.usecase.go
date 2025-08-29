@@ -13,6 +13,7 @@ import (
 
 type IAuthService interface {
   GetJwtFromLogin(ctx context.Context,user string, pssw string) (*AuthWithJwtDTO,error)
+  // GetJwtFromRefresh(ctx context.Context, refresh string) (*AuthWithJwtDTO, error)
 }
 
 type authService struct {
@@ -64,7 +65,7 @@ func (s *authService) GetJwtFromLogin(ctx context.Context, user string, pssw str
     "type": "access",
     "username": userRes.Username,
     "iat" : time.Now().Unix(),
-    "exp" : time.Now().Add(time.Hour * 24).Unix(),
+    "exp" : time.Now().Add(time.Minute * 3).Unix(),
   }
 
   refreshClaims := jwt.MapClaims{
@@ -108,6 +109,10 @@ func (s *authService) GetJwtFromLogin(ctx context.Context, user string, pssw str
   return loginMeta, nil
 } 
 
+
+// func (s *authService) GetJwtFromRefresh(ctx context.Context, refresh string) (*AuthWithJwtDTO, error) {
+
+// }
 // import (
 // 	"context"
 // 	"fmt"

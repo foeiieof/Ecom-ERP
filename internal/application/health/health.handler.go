@@ -21,11 +21,18 @@ func NewHealthHandler(logger *zap.Logger) HealthHandler {
   }
 }
 
-// @Summary      Health check
-// @Description  Check system status
-// @Tags         Health
-// @Success      200 {object} map[string]string
-// @Router       /api/v1/health [get]
+type Account struct {
+  demo string
+}
+// is available 
+//  @Summary      List accounts
+//  @Description  get accounts
+//  @Tags         accounts
+//  @Accept       json
+//  @Produce      json
+//  @Param        q    query     string  false  "name search by q"  Format(email)
+//  @Success      200  {array}   response.APIResponse[Account]
+//  @Router       /health [get]
 func (h *healthHandler) HealthCheck(c *fiber.Ctx) error {
 	return  response.SuccessResponse(c,"ok!","")
   // c.JSON(fiber.Map{ "status":    "healthy", "timestamp": fmt.Sprintf("%d", c.Context().Time().Unix()), })

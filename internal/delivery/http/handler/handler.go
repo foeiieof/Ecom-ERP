@@ -58,12 +58,13 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
 	swagger.Get("/*", r.swaggerHandler.SwaggerIndex)
 
 	demo := router.Group("/demo")
-	demo.Get("/", r.demoHandler.DemoCheck)
+  demo.Get("/", r.demoHandler.DemoCheck)
 
   // Auth Handler 
   auth := router.Group("/auth")
   // auth.Get("/", r.authHandler.CheckAuth)
   auth.Post("/login", r.authHandler.PostUserAuthLogin )
+  auth.Post("/refresh", r.authHandler.PostUserAuthRefresh )
   // auth/refresh
   // auth/logout
   // auth/register
@@ -74,7 +75,7 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
   me := router.Group("/user",r.callback)
   me.Get("/me", r.usersHandle.GetUserMe)
 
-  user := router.Group("/users", r.callback)
+  user := router.Group("/users")
   user.Get("/", r.usersHandle.GetUsers)
   user.Get("/:userId", r.usersHandle.GetUserByID)
   user.Post("/", r.usersHandle.CreateUser)
@@ -82,7 +83,7 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
   user.Delete("/:userId", r.usersHandle.DeleteUserByID)
 
   // Shopee Handle
-	shopee := router.Group("/shopee")
+	shopee := router.Group("/shopee", r.callback)
 	// shopee.Get("/", r.shopeeHandler.GetShopeeAuthByShopId)
 
 	// Generate Link for Auth + add to DB
@@ -96,9 +97,17 @@ func (r *RouterHandler) RegisterHandlers(router fiber.Router) {
   shopee.Get("/webhook/auth_partner/:partnerId", r.shopeeHandler.GetWebHookAuthPartner)
 
 
+  partner := shopee.Group("/partner")
   // Crud Shopee Partner
-  shopee.Get("/partner", r.partnerHandler.CreateShopeePartner )
-  shopee.Get("/partner/shop_list/:partnerID", r.shopeeHandler.GetShopeeShopListByPartnerID )
+  partner.Post("/", r.partnerHandler.CreateShopeePartner)
+  partner.Get("/", r.partnerHandler.GetAllShopeePartner)
+  partner.Get("/:partnerID", r.partnerHandler.GetShopeePartnerByID)
+  partner.Patch("/:partnerID", r.partnerHandler.UpdateShopeePartnerByID)
+  partner.Delete("/:partnerID", r.partnerHandler.DeleteShopeePartnerByID)
+
+  // waiting to update struct 
+  shopee.Get("/shop_list/:partnerID", r.shopeeHandler.GetShopeeShopListByPartnerID )
+  
   // waiting 
   // shopee.Get("/partner/shop_detail/:shopID", func(c *fiber.Ctx) error { return c.SendString("OK")})
 

@@ -70,7 +70,7 @@ type TPostShopAuthPartner struct {
 
 func (d *shopeeHandler) PostShopAuthPartner(c *fiber.Ctx) error {
 	// path := c.Path()
-	var reqBody partner.ShopeePartnerDTO 
+	var reqBody partner.IReqShopeePartnerDTO 
 	var err error
 	if err = c.BodyParser(&reqBody); err != nil {
 		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopAuthPartner", err)
@@ -92,7 +92,7 @@ func (d *shopeeHandler) PostShopAuthPartner(c *fiber.Ctx) error {
 
 
   // partnerDTO := partner.ShopeePartnerDTO()
-	_, err = d.PartnerService.AddShopeePartner(c.Context(),reqBody)
+	_, err = d.PartnerService.AddShopeePartner(c.Context(),&reqBody)
 	if err != nil {
 		d.Logger.Error("service.AddShopeePartner :", zap.Error(err))
 		return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostShopAuthPartner", err)
