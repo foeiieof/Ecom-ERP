@@ -11,15 +11,18 @@ import (
 type ServerConfig struct {
   AppEnv           string `env:"APP_ENV"         envDefault:"dev"`
   Host             string `env:"APP_HOST"        envDefault:"localhost"`
-  Port             string `env:"APP_PORT"         envDefault:"8080"`
+  Port             string `env:"APP_PORT"        envDefault:"8080"`
   Prefix           string `env:"APP_API_PREFIX"  envDefault:"/api/v1"`
   AppVersion       string `env:"APP_VERSION"     envDefault:"0.0.1"`
 }
 
 type JWTConfig struct {
-  AuthJWTSecretKey string `env:"AUTH_JWT_SECRET_KEY" envDefault:"secret"`
-  AuthJWTExpTime   int64  `env:"AUTH_JWT_EXP_TIME" envDefault:"31536000"`
-  AuthJWTIssuer    string `env:"AUTH_JWT_ISSUER" envDefault:"ecommerce"`
+  AuthJWTSecretKey string `env:"AUTH_JWT_SECRET_KEY"  envDefault:"secret"`
+  // AuthJWTExpTime   int64  `env:"AUTH_JWT_EXP_TIME"    envDefault:"31536000"`
+  AuthJWTIssuer    string `env:"AUTH_JWT_ISSUER"      envDefault:"ecommerce"`
+
+  AuthJWTAccessIN  int64  `env:"AUTH_JWT_ACCESSES_IN" envDefault:"3"`
+  AuthJWTRefreshIN int64  `env:"AUTH_JWT_REFRESHES_IN"  envDefault:"1440"`
 }
 
 type DBConfig struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"ecommerce/internal/application/users"
 	"ecommerce/internal/env"
+	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,7 +14,8 @@ import (
 
 type IAuthService interface {
   GetJwtFromLogin(ctx context.Context,user string, pssw string) (*AuthWithJwtDTO,error)
-  // GetJwtFromRefresh(ctx context.Context, refresh string) (*AuthWithJwtDTO, error)
+  GetJwtFromRefresh(ctx context.Context, refresh string) (*AuthWithJwtDTO, error)
+  // GetJwtFromRefresh
 }
 
 type authService struct {
@@ -40,6 +42,21 @@ type AuthWithJwtDTO struct {
   AccessToken  string `json:"access_token"`
   RefreshToken string `json:"refresh_token"`
   TenantID  *string`json:"tenant_id,omitempty"`
+}
+
+
+type JwtType string
+
+const (
+  Access JwtType = "access"
+  Refresh JwtType = "refresh"
+)
+
+
+type AuthClaimsEntiy struct {
+  Type JwtType 
+  Username string
+  jwt.RegisteredClaims
 } 
 
 func (s *authService) GetJwtFromLogin(ctx context.Context, user string, pssw string) ( *AuthWithJwtDTO ,error) {
@@ -65,7 +82,7 @@ func (s *authService) GetJwtFromLogin(ctx context.Context, user string, pssw str
     "type": "access",
     "username": userRes.Username,
     "iat" : time.Now().Unix(),
-    "exp" : time.Now().Add(time.Minute * 3).Unix(),
+    "exp" : time.Now().Add(time.Minute * time.Duration(s.Config.JWT.AuthJWTAccessIN)).Unix(),
   }
 
   refreshClaims := jwt.MapClaims{
@@ -92,7 +109,7 @@ func (s *authService) GetJwtFromLogin(ctx context.Context, user string, pssw str
     return nil , err
   }
 
-  // // stanmp login in User repo 
+  //stanmp login in User repo 
   var onTime = time.Now()
   var loginAt = &users.UserEntity{ Username : user, LastLoginAt: &onTime } 
   _,errO := s.UserRepository.UpdateUserDetail(ctx, *loginAt)
@@ -110,22 +127,86 @@ func (s *authService) GetJwtFromLogin(ctx context.Context, user string, pssw str
 } 
 
 
-// func (s *authService) GetJwtFromRefresh(ctx context.Context, refresh string) (*AuthWithJwtDTO, error) {
+func (s *authService) GetJwtFromRefresh(ctx context.Context, refresh string) (*AuthWithJwtDTO, error) {
 
-// }
-// import (
-// 	"context"
-// 	"fmt"
-// 	"time"
+  secret := []byte(s.Config.JWT.AuthJWTSecretKey)
 
-// 	"ecommerce/domain/auth"
-// 	// jwtService "ecommerce/internal/infrastructure/jwt"
+  // 1.parse refresh 
+  token,err := jwt.ParseWithClaims(refresh, &AuthClaimsEntiy{},func(token *jwt.Token) (interface{}, error ){
+  if _,ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+      return nil, errors.New("unexpected signing method")
+    }
+    return secret, nil
+  } )
+  if err != nil { return nil, err }
 
-// 	"github.com/google/uuid"
-// 	"golang.org/x/crypto/bcrypt"
-// )
+  // 2.Extract refresh 
+  claims, ok := token.Claims.(*AuthClaimsEntiy)
+  if !ok || !token.Valid {
+    return nil, errors.New("invalid refresh token")
+  }
 
-// // Service implements the auth.AuthService interface
+  // 3.Check type
+  if claims.Type != "refresh" {
+    return nil, errors.New("not a refresh token type")
+  }
+
+  if claims.ExpiresAt != nil && claims.ExpiresAt.Time.Before(time.Now()){
+    return nil, errors.New("refresh token expired ")
+  }
+
+  // 4.Verify user
+  user,err := s.UserRepository.GetUserDetailByUsername(ctx,claims.Username) 
+  if err!=nil {
+    return nil, errors.New("user not found")
+  } 
+
+  accessTokenClaims := &AuthClaimsEntiy{
+    Type: Access,
+    Username: claims.Username,
+    RegisteredClaims: jwt.RegisteredClaims{
+      Subject: user.ID,
+      IssuedAt: jwt.NewNumericDate(time.Now()),
+      ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(s.Config.JWT.AuthJWTAccessIN)) ),
+    },
+  }
+
+  refreshTokenClaims := &AuthClaimsEntiy{
+    Type: Refresh,
+    Username: claims.Username,
+    RegisteredClaims: jwt.RegisteredClaims{
+      Subject: user.ID,
+      IssuedAt: jwt.NewNumericDate(time.Now()),
+      ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(s.Config.JWT.AuthJWTRefreshIN))),
+    },
+  }
+
+  accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessTokenClaims)
+  refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshTokenClaims)
+  
+  signAccess, err := accessToken.SignedString(secret) 
+  if err != nil { return nil, err}
+  signRefresh, err := refreshToken.SignedString(secret)
+  if err != nil { return nil, err}
+
+
+  //stanmp login in User repo 
+  var onTime = time.Now()
+  var loginAt = &users.UserEntity{ Username : claims.Username, LastLoginAt: &onTime } 
+  _,errO := s.UserRepository.UpdateUserDetail(ctx, *loginAt)
+  if errO != nil { return nil, err} 
+
+  refreshMeta := &AuthWithJwtDTO {
+    Username: user.Username,
+    Email: user.Email,
+    FullName: user.FullName,
+    AccessToken: signAccess,
+    RefreshToken: signRefresh,
+  }
+
+  return refreshMeta,nil 
+}
+  // // Service implements the auth.AuthService interface
 // type Service struct {
 // 	userRepo   auth.UserRepository
 // 	tokenRepo  auth.TokenRepository

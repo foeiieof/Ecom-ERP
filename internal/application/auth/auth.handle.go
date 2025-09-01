@@ -2,6 +2,7 @@ package auth
 
 import (
 	"ecommerce/internal/delivery/http/response"
+	"ecommerce/internal/env"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -17,23 +18,22 @@ type AuthHandler interface {
 }
 
 type authHandler struct {
-  service IAuthService  
-  logger  *zap.Logger
-  validate *validator.Validate
-
+  Config  *env.Config
+  Service IAuthService  
+  Logger  *zap.Logger
+  Validate *validator.Validate
 }
 
-func NewAuthHandle(src IAuthService, log *zap.Logger, valid *validator.Validate) AuthHandler {
+func NewAuthHandle(cfg *env.Config,src IAuthService, log *zap.Logger, valid *validator.Validate) AuthHandler {
   return &authHandler{
-    service: src,
-    logger: log,
-    validate: valid,
+    Config: cfg,
+    Service: src,
+    Logger: log,
+    Validate: valid,
   }
 } 
 
-func (d *authHandler) CheckAuth(c *fiber.Ctx) error{
-  return response.SuccessResponse(c,"check-auth","")
-}
+func (d *authHandler) CheckAuth(c *fiber.Ctx) error{ return response.SuccessResponse(c,"check-auth","") }
 
 type IReqUserLogin struct {
   Username string `json:"username" validate:"required"`
@@ -47,10 +47,10 @@ func (d *authHandler)PostUserAuthLogin(c *fiber.Ctx) error {
     return response.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body : PostUserAuthLogin", err)
   }
 
-  if err := d.validate.Struct(req) ; err != nil { return response.ErrorResponse(c, fiber.StatusBadRequest, "handler.PostUserAuthLogin", "Invalidate Body") }
+  if err := d.Validate.Struct(req) ; err != nil { return response.ErrorResponse(c, fiber.StatusBadRequest, "handler.PostUserAuthLogin", "Invalidate Body") }
 
 
-  res,err := d.service.GetJwtFromLogin(c.Context(), req.Username, req.Password)
+  res,err := d.Service.GetJwtFromLogin(c.Context(), req.Username, req.Password)
   if err != nil {return response.ErrorResponse(c,fiber.StatusBadRequest, "handler.PostUserAuthLogin", "username or password invalid")}
 
     // user, perms, err := service.AuthenticateUser(req.Username, req.Password)
@@ -76,18 +76,30 @@ func (d *authHandler)PostUserAuthLogin(c *fiber.Ctx) error {
     c.Cookie(&fiber.Cookie{
     Name: "refresh_token",
     Value: res.RefreshToken,
-    Expires: time.Now().Add(time.Hour * 24 * 7 ),
-    HTTPOnly: true,
-    Secure: true,
-    SameSite: "Strict",
+    Expires: time.Now().Add(time.Duration(d.Config.JWT.AuthJWTRefreshIN) * time.Minute),
+    HTTPOnly: true, Secure: true,
+    SameSite: fiber.CookieSameSiteStrictMode,
     Path: "/api/v1/auth/refresh"}) 
 
     return response.SuccessResponse(c,"handler.PostUserAuthLogin", res)
 }
 
 func (d *authHandler)PostUserAuthRefresh(c *fiber.Ctx) error {
-
   refreshToken := c.Cookies("refresh_token")
+  if refreshToken ==""{
+    return response.ErrorResponse(c,fiber.StatusBadGateway,"handler.PostUserAuthRefresh","refresh token not found!") }
 
-  return response.SuccessResponse(c,"handler.PostUserAuthRefresh", refreshToken)
+  res,err := d.Service.GetJwtFromRefresh(c.Context(),refreshToken)
+  if err != nil {return response.ErrorResponse(c,fiber.StatusBadGateway, "handler.PostUserAuthRefresh", "Authurization not permission")}
+
+  c.Cookie(&fiber.Cookie{
+    Name: "refresh_token",
+    Value: res.RefreshToken,
+    Expires: time.Now().Add(time.Duration(d.Config.JWT.AuthJWTRefreshIN) * time.Minute),
+    HTTPOnly: true , Secure: true,
+    SameSite: fiber.CookieSameSiteStrictMode,
+    Path: "/api/v1/auth/refresh",
+  })
+
+  return response.SuccessResponse(c,"handler.PostUserAuthRefresh", res)
 }

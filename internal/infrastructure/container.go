@@ -141,7 +141,7 @@ func (c *Container) InitHandlers(g fiber.Router) {
   users := users.NewUserHandler(usersUsecase,c.Logger, c.Valid)
 
   authUsecase := auth.NewAuthService(c.Config,c.Logger,userRepo)
-  auth := auth.NewAuthHandle(authUsecase, c.Logger, c.Valid)
+  auth := auth.NewAuthHandle(c.Config,authUsecase, c.Logger, c.Valid)
 
 	h := handler.NewRouterHandler(c.Middleware.Auth.Handler(), health, swagger, demo, shopee, shopeePartner,auth,users)
 	h.RegisterHandlers(g)
