@@ -5,7 +5,7 @@ import (
 )
 
 // type IGenerateBodyQueryParams struct {
-//   Query string 
+//   Query string
 //   Body *bytes.Buffer
 // }
 
@@ -255,3 +255,50 @@ type IResOrderDetailByOrderSN struct {
 
 // Reminder Note :
 // * Embeded all struct
+
+// path : /api/v2/shop/get_shop_info
+type IResSipAffiShopsDTO struct {
+  AffiShopID int    `json:"affi_shop_id"`
+  Region     string `json:"region"`
+}
+
+type IResLinkedDirectShopListDTO struct {
+  DirectShopID int `json:"direct_shop_id"`
+  DirectShopRegion string `json:"direct_shop_region"`
+}
+
+type IResOutletShopInfoList struct {
+  OutletShopID int `json:"outlet_shop_id"`
+}
+
+type IResShopGetShopInfoDTO struct {
+  ShopName      string   `json:"shop_name"`
+  Region        string   `json:"region"`
+  Status        string   `json:"status"`
+  SipAffiShops  []IResSipAffiShopsDTO `json:"sip_affi_shops"`
+  IsCB          bool   `json:"is_cb"`
+  IsSip          bool  `json:"is_sip"`
+  ISUpgradedCBSC bool  `json:"is_upgraded_cbsc"`
+  MerchantID     int   `json:"merchant_id"`
+  ShopFullFilmentFlag   string `json:"shop_fulfillment_flag"`
+  IsMainShop     bool  `json:"is_main_shop"`
+  IsDirectShop   bool  `json:"is_direct_shop"`
+  LinkedMainShopID int `json:"linked_main_shop_id"`
+  LinkedDirectShopList []IResLinkedDirectShopListDTO `json:"linked_direct_shop_list"`
+  IsOneAwb     bool    `json:"is_one_awb"`
+  IsMartShop   bool    `json:"is_mart_shop"`
+  IsOutletShop bool    `json:"is_outlet_shop"`
+  MartShopID   int     `json:"mart_shop_id"`
+  OutletShopInfoList   []IResOutletShopInfoList `bson:"outlet_shop_info_list"`
+} 
+
+// path : /api/v2/shop/get_profile
+type IResShopGetProfile struct {
+  ShopLogo    string `json:"shop_logo"`
+  Description string `json:"description"`
+  ShopName    string `json:"shop_name"`
+  InvoiceIssuer string  `json:"invoice_issuer"`
+}
+
+// path : ***/***
+// type [IRes|IReq]:Table:Method

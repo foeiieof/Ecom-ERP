@@ -22,12 +22,14 @@ type IShopeeHandler interface {
 
 	PostShopeeDemoTemplate(c *fiber.Ctx) error
 
+  //
+  GetShopeeShopDetails(c *fiber.Ctx) error
 	// Partner IShopeeHandler
 	GetShopeeShopListByPartnerID(c *fiber.Ctx) error
 
 	// Order
 	GetShopeeOrderListByShopID(c *fiber.Ctx) error
-	GetShopeeOrderListByShopSN(c *fiber.Ctx) error
+	GetShopeeOrderDetailsByShopIDAndOrderSN(c *fiber.Ctx) error
 }
 
 type shopeeHandler struct {
@@ -111,10 +113,8 @@ func (d *shopeeHandler) GetWebHookAuthPartner(c *fiber.Ctx) error {
 	code := c.Query("code")
 	shopId := c.Query("shop_id")
 
-	d.Logger.Info("Middleware:", zap.String("code", (code)))
-	d.Logger.Info("Middleware:", zap.String("shop_id", (shopId)))
-
-	data, _ := d.ShopeeService.WebhookAuthentication(partnerId, code, shopId)
+  data, err := d.ShopeeService.WebhookAuthentication(c.Context() , partnerId, code, shopId)
+  if err != nil { return response.ErrorResponse(c, fiber.StatusConflict, "shopee.handler.GetWebHookAuthPartner", err.Error())}
 
 	return response.SuccessResponse(c, "GetWebHookAuthPartner", data)
 }
@@ -178,6 +178,8 @@ func (d *shopeeHandler) GetShopeeShopListByPartnerID(c *fiber.Ctx) error {
 		return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error())
 	}
 
+  // 
+
 	return response.SuccessResponse(c, "GetShopeeShopListByPartnerID", data)
 }
 
@@ -238,7 +240,16 @@ func (d *shopeeHandler) GetShopeeOrderListByShopID(c *fiber.Ctx) error {
 	return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopID", data)
 }
 
-func (d *shopeeHandler) GetShopeeOrderListByShopSN(c *fiber.Ctx) error {
+func (d *shopeeHandler)GetShopeeShopDetails(c *fiber.Ctx) error {
+  shopID := c.Params("shopeeShopID")
+
+  res,err := d.ShopeeService.GetShopeeShopDetailsByShopID(c.Context(), shopID)
+  if err != nil { return response.ErrorResponse(c, fiber.StatusConflict,"handler.GetShopeeShopDetails" ,err) }
+
+  return response.SuccessResponse(c, "handle.GetShopeeShopDetails", res)
+}
+
+func (d *shopeeHandler) GetShopeeOrderDetailsByShopIDAndOrderSN(c *fiber.Ctx) error {
 
 	shopIDParam := c.Params("shopeeShopID")
 	orderSNParam := c.Params("orderSN")
@@ -263,6 +274,9 @@ func (d *shopeeHandler) GetShopeeOrderListByShopSN(c *fiber.Ctx) error {
 	d.Logger.Debug("shopeeHandle.GetShopeeOrderListByShopSN", zap.Any("data", data))
 
 	// res := orderParams + pendingQuery + optionQuery
+
+  // Test 
+  // return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopSN", fmt.Sprintf("%s*-*%s", shopIDParam,orderSNParam ))
 	return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopSN", data)
 }
 

@@ -27,12 +27,13 @@ type IShopeeService interface {
 	CreateAccessAndRefreshTokenByCodeOnAdapter(ctx context.Context,partnerID string, shopID string, code string) (*IResAccessAndRefreshToken, error)
 
 	GenerateAuthLink(ctx context.Context,partnerName string, partnerId string, partnerKey string) (string, error)
-	GenerateSignWithPathURL(ctx context.Context,state string, pathUrl string, partnerID string, partnerKey string, shopID string, code string, accessToken string) (*IGenerateSignWithUri, error)
+	// GenerateSignWithPathURL(ctx context.Context,state string, pathUrl string, partnerID string, partnerKey string, shopID string, code string, accessToken string) (*IGenerateSignWithUri, error)
 
-	WebhookAuthentication(partnerId string, code string, shopId string) (any, error)
+	WebhookAuthentication(ctx context.Context,partnerId string, code string, shopId string) (any, error)
 
 	AddShopeeAuthRequest(ctx context.Context,partnerId string, partnerKey string, partnerName string, url string) (*ShopeeAuthRequestModel, error)
 	// AddShopeePartner(ctx context.Context,partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error)
+  GetShopeeShopDetailsByShopID(ctx context.Context, shopID string) ( *ShopeeShopDetailsDTO,error)
 	GetShopeeShopListByPartnerID(ctx context.Context,partnerID string) (*[]IResShopeeShopList, error)
 
 	// order
@@ -47,7 +48,7 @@ type shopeeService struct {
 
 	ShopeeAdapter adapter.IShopeeService
 
-	ShopeeAuthRepository        ShopeeAuthRepository
+	ShopeeAuthRepository        ShopeeAuthRepository // for Collect shopee shop may contains (access token , refresh token , ...other)
 	ShopeeAuthRequestRepository ShopeeAuthRequestRepository
 	ShopeePartnerRepository     partner.ShopeePartnerRepository
 }
@@ -128,7 +129,7 @@ func (s *shopeeService) GetRefreshTokenOnAdapter(ctx context.Context,partnerID s
 
 	// Create log_refresh_token
 
-	updated, err := s.ShopeeAuthRepository.UpdateShopeeShopAuth(partnerID, shopID, res.AccessToken, res.RefreshToken)
+	updated, err := s.ShopeeAuthRepository.UpdateShopeeShopAuth(partnerID, "",shopID, res.AccessToken, res.RefreshToken)
 	if err != nil {
 		return nil, err
 	}
@@ -243,8 +244,32 @@ var baseString string // baseString := fmt.Sprintf("%s%s%s", partnerID, path, ti
 		TimeStamp: time.Now()}, nil
 }
 
-func (s *shopeeService) WebhookAuthentication(partnerId string, code string, shopId string) (any, error) {
-	return map[string]string{"status": "ok", "partner_id": partnerId, "code": code, "shopId": shopId}, nil
+func (s *shopeeService) WebhookAuthentication(ctx  context.Context,partnerId string, code string, shopId string) (any, error) {
+
+
+  // 0. get partner details
+  partner, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx, partnerId)
+  if err != nil { return nil , err}
+
+  // 1. get sign code
+  // "/api/v2/auth/token/get"
+  sign,err := s.ShopeeAdapter.GenerateSignWithPathURL("PUBLIC", "/auth/token/get", partner.PartnerID ,partner.SecretKey,shopId,code, "" )
+  if err != nil { return nil, err}
+  s.Logger.Info("usecase.WebhookAuthentication", zap.String("val" , partner.PartnerID))
+
+  // 2. get access token 
+  adapter, err := s.ShopeeAdapter.GetAccessToken(partner.PartnerID,shopId, code, sign.Sign)
+  if err != nil { return nil ,err }
+  // s.Logger.Info("shopee.usecase.WebhookAuthentication", zap.String("val","xxxxxxxxxxxxxxxxxxx" ))
+
+
+  // 3. save to db --> ShopeeShopAuthRepositoryo
+  _,err = s.ShopeeAuthRepository.UpdateShopeeShopAuth(partner.PartnerID, code,shopId,adapter.AccessToken,adapter.RefreshToken  ) 
+  if err != nil { return nil, err } 
+
+  
+
+  return map[string]string{"status": "ok", "partner_id": partnerId, "code": code, "shopId": shopId, "access_token": adapter.AccessToken, "refresh_token": adapter.RefreshToken}, nil
 }
 
 func (s *shopeeService) AddShopeeAuthRequest(ctx context.Context,partnerId string, partnerKey string, partnerName string, url string) (*ShopeeAuthRequestModel, error) {
@@ -327,6 +352,29 @@ func (s *shopeeService) CreateAccessAndRefreshTokenByCodeOnAdapter(ctx context.C
 	// url := fmt.Sprintf("%s%s?partner_id=%s&timestamp=%s&sign=%s&redirect=%s", host, path, partnerId, timest, sign, redirectUrl)
 }
 
+type ShopeeShopDetailsDTO struct {
+
+} 
+
+func (s *shopeeService)GetShopeeShopDetailsByShopID(ctx context.Context, shopID string) ( *ShopeeShopDetailsDTO,error) {
+
+  // 0. check in db
+
+  shop,err := s.ShopeeAuthRepository.GetShopeeShopAuthByShopId(shopID)
+  if err != nil { return nil ,err}
+
+  partner,err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shop.PartnerID)
+
+  // 1. get from adapter 
+  params := &adapter.IReqShopeeAdapter{ PartnerID: partner.PartnerID, AccessToken: shop.AccessToken, ShopID: shopID, SecretKey: partner.SecretKey, }
+  _,err = s.ShopeeAdapter.GetShopProfile(ctx, params)
+
+  // 2. save to DB
+
+
+  return nil,nil
+} 
+
 type IResShopeeShopList struct {
 	ShopID   string
 	ExpireAt time.Time
@@ -375,7 +423,14 @@ func (s *shopeeService) GetShopeeShopListByPartnerID(ctx context.Context,partner
 			ExpireAt: time.Unix(expireInt, 0),
 			Region:   v.Region,
 		})
-	}
+	
+  // add to --> DB (stored)
+    _,err = s.ShopeeAuthRepository.CreateShopeeAuth(partnerID, string(v.ShopID), "", "", "")
+    if err != nil { 
+      s.Logger.Info("usecase.GetShopeeShopListByPartnerID", zap.String("info", "failed create ShopeeShopAuth "))
+    }
+
+  }
 
 	return &data, nil
 }

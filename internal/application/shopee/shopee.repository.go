@@ -18,7 +18,7 @@ type ShopeeAuthRepository interface {
 	InitRepository() error
 	CreateShopeeAuth(partnerID string, shopId string, codeID string, accessToken string, refreshToken string) (*ShopeeAuthModel, error)
 	GetShopeeShopAuthByShopId(shopId string) (*ShopeeAuthModel, error)
-  UpdateShopeeShopAuth(partnerID string , shopID string ,accessToken string, refreshToken string) (*ShopeeAuthModel, error)
+  UpdateShopeeShopAuth(partnerID string , code string,shopID string ,accessToken string, refreshToken string) (*ShopeeAuthModel, error)
 }
 
 type shopeeAuthRepo struct {
@@ -31,20 +31,21 @@ func NewShopeeAuthRepository(db *mongo.Collection, log *zap.Logger) ShopeeAuthRe
 }
 
 func (r *shopeeAuthRepo) InitRepository() error {
-	// indexs := []mongo.IndexModel{
-	//   {
-	//     Keys: bson.D{{Key:"partner_id", Value: 1}},
-	//     Options: options.Index().SetUnique(true),
-	//   },
-	// }
+	indexs := []mongo.IndexModel{
+	  {
+	    Keys: bson.D{{Key:"shop_id", Value: 1}},
+	    Options: options.Index().SetUnique(true),
+	  },
+	}
 
-	// _, err := r.db.Indexes().CreateMany(context.TODO(),indexs)
+	_, err := r.db.Indexes().CreateMany(context.TODO(),indexs)
+	if err != nil {
+	  r.logger.Error("error creating index", zap.Error(err))
+	  return errors.New("ShopeePartnerRepository.InitRepository: failed creating index InitRepository")
+	}
 
-	// if err != nil {
-	//   r.logger.Error("error creating index", zap.Error(err))
-	//   return errors.New("ShopeePartnerRepository.InitRepository: failed creating index InitRepository")
-	// }
-	// r.logger.Info("ShopeePartnerRepository.InitRepository: index created")
+	r.logger.Info("ShopeePartnerRepository.InitRepository: index created")
+
 	return nil
 }
 
@@ -96,27 +97,32 @@ func (r *shopeeAuthRepo) GetShopeeShopAuthByShopId(shopId string) (*ShopeeAuthMo
 	return &data, nil
 }
 
-func (r *shopeeAuthRepo) UpdateShopeeShopAuth(partnerID string , shopID string ,accessToken string, refreshToken string) (*ShopeeAuthModel, error) {
+func (r *shopeeAuthRepo) UpdateShopeeShopAuth(partnerID string , code string,shopID string ,accessToken string, refreshToken string) (*ShopeeAuthModel, error) {
 
   if shopID == "" || accessToken == "" || refreshToken == "" || partnerID == ""{
     return nil, errors.New("shopId is required")
   }
 
   filter := bson.M{"partner_id": partnerID, "shop_id": shopID}
+
+
+
   update := bson.M{
-    "$set": bson.M{
       "access_token" : accessToken,
       "refresh_token": refreshToken,
       "expired_at"   : time.Now().Add(time.Hour * 4),
       "modified_at"  : time.Now(),
       "modified_by"  : "admin",
-
-    },
   }
+
+  if code != "" {
+    update["code"] = code
+  }
+
   opt := options.FindOneAndUpdate().SetReturnDocument(options.After)
   var updateShopeeAuth ShopeeAuthModel
 
-  err := r.db.FindOneAndUpdate(context.TODO(), filter, update, opt).Decode(&updateShopeeAuth)
+  err := r.db.FindOneAndUpdate(context.TODO(), filter,bson.M{"$set": update} , opt).Decode(&updateShopeeAuth)
   if err != nil {
     errorLog := err.Error()
     parseError := strings.SplitN(errorLog, ":", 2)
@@ -178,8 +184,50 @@ func (r *shopeeAuthRequestRepo) SaveShopeeAuthRequestWithName(partnerId string, 
 	return data, nil
 }
 
+
+// -- ShopeeShopDetailsRepository
+// -- user : ShopeeShopDetailsModel, ShopeeShopProfileModel 
+type ShopeeShopDetailsRepository interface {
+  InitRepository() error
+  CreateShopeeShopDetails(ctx context.Context, ) error
+  // GetAllShopeeShopDetails() error
+  // GetShopeeShopDetailsById(ctx context.Context) error
+  // UpdateShopeeShopDetails(ctx context.Context) error
+  // DeleteShopeeShopDetails(ctx context.Context) error
+}
+type shopeeShopDetailsRepo struct {
+  Logger *zap.Logger
+  DB     *mongo.Collection
+}
+func NewShopeeShopDetailsRepository(db *mongo.Collection, log *zap.Logger) ShopeeShopDetailsRepository {
+  return &shopeeShopDetailsRepo{ DB: db, Logger : log }
+}
+func (r *shopeeShopDetailsRepo) InitRepository() error {
+  indexs := []mongo.IndexModel{
+    {
+      Keys: bson.D{{ Key: "shop_id", Value: 1 }} ,
+      Options: options.Index().SetUnique(true),
+    },
+  }
+
+  _,err := r.DB.Indexes().CreateMany(context.TODO(), indexs)
+  if err != nil {
+    r.Logger.Error("error creating index", zap.Error(err))
+    return errors.New("ShopeeShopDetailsRepository.InitRepository: failed creating index InitRepository")
+  }
+
+  r.Logger.Info("ShopeePartnerRepository.InitRepository: index created")
+  return nil
+}
+
+func (r *shopeeShopDetailsRepo)CreateShopeeShopDetails(ctx context.Context) error {
+  return nil
+}
+
+
+
 // -- ShopeePartnerRepository
-// type ShopeePartnerRepository interface {
+// type ShopeePartnerRepository interface k
 // 	InitRepository() error
 // 	CreateShopeePartner(partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error)
 // 	GetShopeePartnerByPartnerId(partnerId string) (*ShopeePartnerModel, error)
