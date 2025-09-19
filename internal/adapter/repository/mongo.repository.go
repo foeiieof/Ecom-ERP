@@ -11,6 +11,8 @@ type IMongoCollectionRepository interface {
   ShopeeAuthRequestCollection() shopee.ShopeeAuthRequestRepository
   ShopeePartnerCollection() partner.ShopeePartnerRepository
   UsersCollection() users.UserRepository
+  ShopeeShopCollection() shopee.ShopeeShopDetailsRepository
+  ShopeeOrderCollection() shopee.ShopeeOrderRepository
 }
 
 type mongoCollectionRepository struct {
@@ -18,6 +20,8 @@ type mongoCollectionRepository struct {
   shopeeAuthRequestRepo shopee.ShopeeAuthRequestRepository
   shopeePartnerRepo partner.ShopeePartnerRepository
   userRepo users.UserRepository
+  shopeeShopRepo shopee.ShopeeShopDetailsRepository
+  shopeeOrderRepo shopee.ShopeeOrderRepository
 }
 
 func NewMongoCollectionRepository(
@@ -25,6 +29,8 @@ func NewMongoCollectionRepository(
   shopeeAuthReq shopee.ShopeeAuthRequestRepository,
   shopeePartner partner.ShopeePartnerRepository,
   users users.UserRepository,
+  shop shopee.ShopeeShopDetailsRepository,
+  shopeeOrder shopee.ShopeeOrderRepository,
   // logger *zap.Logger, cfg *env.Config,
 ) IMongoCollectionRepository {
 	return &mongoCollectionRepository{
@@ -32,6 +38,8 @@ func NewMongoCollectionRepository(
     shopeeAuthRequestRepo: shopeeAuthReq,
     shopeePartnerRepo: shopeePartner,
     userRepo: users,
+    shopeeShopRepo: shop,
+    shopeeOrderRepo: shopeeOrder,
 	}
 }
 
@@ -51,3 +59,9 @@ func (m *mongoCollectionRepository) UsersCollection() users.UserRepository {
   return m.userRepo
 }
 
+func (m *mongoCollectionRepository) ShopeeShopCollection() shopee.ShopeeShopDetailsRepository {
+  return m.shopeeShopRepo
+}
+func (m *mongoCollectionRepository) ShopeeOrderCollection() shopee.ShopeeOrderRepository{
+  return m.shopeeOrderRepo
+}

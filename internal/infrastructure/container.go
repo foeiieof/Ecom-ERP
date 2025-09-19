@@ -82,9 +82,18 @@ func (c *Container) InitRepositories() {
   userReq := users.NewUserRepository(userCollection, c.Logger)
   userReq.InitRepository()
 
+  shopeeShopCollection := db.Collection("shopee_shop")
+  shopeeShop := shopee.NewShopeeShopDetailsRepository(shopeeShopCollection, c.Logger)
+  shopeeShop.InitRepository()
+
+  ShopeeOrderCollection := db.Collection("shopee_order")
+  shopeeOrder := shopee.NewShopeeOrderRepository(ShopeeOrderCollection, c.Logger)
+  shopeeOrder.InitRepository()
+
 	c.Repository = &Repositories{
-		MongoRepository: repository.NewMongoCollectionRepository(shopeeAuth, shopeeAuthReq, shopeePartner,userReq),
+		MongoRepository: repository.NewMongoCollectionRepository(shopeeAuth, shopeeAuthReq, shopeePartner,userReq, shopeeShop, shopeeOrder),
 	}
+  // next using in handle()
 }
 
 // initHandlers initializes HTTP handlers
@@ -124,23 +133,26 @@ func (c *Container) InitHandlers(g fiber.Router) {
 
 	demo := demo.NewDemoHandler(c.Repository.MongoRepository)
 
-  // repositori
+  // repository
 	shopeeRepo := c.Repository.MongoRepository.ShopeeAuthCollection()
 	shopeeReqRepo := c.Repository.MongoRepository.ShopeeAuthRequestCollection()
-
 	shopeePartnerRepo := c.Repository.MongoRepository.ShopeePartnerCollection()
-  shopeePartnerUsecase := partner.NewShopeePartnerService(c.Config, c.Logger, shopeePartnerRepo)
-
-	shopeeUsecase := shopee.NewShopeeService(c.Config, c.Logger, c.Adapter.ShopeeAdapter, shopeeRepo, shopeeReqRepo, shopeePartnerRepo)
-	shopee := shopee.NewShopeeHandler(shopeeUsecase, shopeePartnerUsecase,c.Logger, c.Valid)
-
-  shopeePartner := partner.NewShopeePartnerHandler(c.Logger, c.Valid,shopeePartnerUsecase)
-
   userRepo := c.Repository.MongoRepository.UsersCollection()
+  shopeeShopRepo := c.Repository.MongoRepository.ShopeeShopCollection()
+  shopeeOrderRepo := c.Repository.MongoRepository.ShopeeOrderCollection()
+  // waiting
+  // shopeeShopRepo := c.Repository.MongoRepository.ShopeePartnerCollection()
+  //usecase
+  shopeePartnerUsecase := partner.NewShopeePartnerService(c.Config, c.Logger, shopeePartnerRepo)
+	shopeeUsecase := shopee.NewShopeeService(c.Config, c.Logger, c.Adapter.ShopeeAdapter, shopeeRepo, shopeeReqRepo, shopeePartnerRepo, shopeeShopRepo, shopeeOrderRepo)
   usersUsecase := users.NewUserService(c.Config,c.Logger,userRepo)
-  users := users.NewUserHandler(usersUsecase,c.Logger, c.Valid)
-
   authUsecase := auth.NewAuthService(c.Config,c.Logger,userRepo)
+
+  // shopeeShop := shopee.NewShopeeShopDetailsService () 
+  // handler
+	shopee := shopee.NewShopeeHandler(shopeeUsecase, shopeePartnerUsecase,c.Logger, c.Valid)
+  shopeePartner := partner.NewShopeePartnerHandler(c.Logger, c.Valid,shopeePartnerUsecase)
+  users := users.NewUserHandler(usersUsecase,c.Logger, c.Valid)
   auth := auth.NewAuthHandle(c.Config,authUsecase, c.Logger, c.Valid)
 
 	h := handler.NewRouterHandler(

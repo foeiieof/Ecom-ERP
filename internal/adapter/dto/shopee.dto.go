@@ -54,7 +54,7 @@ type IResShopeeResponse struct {
 	ReqquestID string `json:"request_id"`
 	Error      string `json:"error"`
 	Message    string `json:"message"`
-  More       bool   `json:"more"`
+  More       *bool   `json:"more"`
 }
 
 type IResShopeeAuthRefreshResponse struct {
@@ -156,7 +156,7 @@ type IResOrderDetailItem struct {
 	OrderItemID          int64   `json:"order_item_id"`
 	PromotionGroupID     int     `json:"promotion_group_id"`
 	ImageInfo            IResOrderDetailImage   `json:"image_info"`
-	ProductLocationID    string  `json:"product_location_id"`
+	ProductLocationID    []string  `json:"product_location_id"`
 	IsPrescriptionItem   bool    `json:"is_prescription_item"`
 	IsB2COwnedItem       bool    `json:"is_b2c_owned_item"`
 }
@@ -216,7 +216,7 @@ type IResOrderListWithDetails struct {
 	GoodsToDeclare          bool             `json:"goods_to_declare"`
 	Note                    string           `json:"note"`
 	NoteUpdateTime          int64            `json:"note_update_time"`
-	ItemList                []IResOrderDetailItem         `json:"item_list"`
+	ItemList                []IResOrderDetailItem `json:"item_list"`
 	PayTime                 int64            `json:"pay_time"`
 	Dropshipper             string           `json:"dropshipper"`
 	DropshipperPhone        string           `json:"dropshipper_phone"`
@@ -224,7 +224,7 @@ type IResOrderListWithDetails struct {
 	BuyerCancelReason       string           `json:"buyer_cancel_reason"`
 	CancelBy                string           `json:"cancel_by"`
 	CancelReason            string           `json:"cancel_reason"`
-	ActualShippingConfirmed bool             `json:"actual_shipping_fee_confirmed"`
+	ActualShippingFeeConfirmed bool             `json:"actual_shipping_fee_confirmed"`
 	BuyerCPFID              string           `json:"buyer_cpf_id"`
 	FulfillmentFlag         string           `json:"fulfillment_flag"`
 	PickupDoneTime          int64            `json:"pickup_done_time"`
@@ -248,7 +248,7 @@ type IResOrderDetailByOrderSNShopWrapper struct {
 
 type IResOrderDetailByOrderSN struct {
   IResShopeeResponse 
-  Warning  []string `json:"warning"`
+  Warning  []string `json:"warning,omitempty"`
   Response IResOrderDetailByOrderSNShopWrapper `json:"response"`
 
 }
@@ -272,6 +272,7 @@ type IResOutletShopInfoList struct {
 }
 
 type IResShopGetShopInfoDTO struct {
+  IResShopeeResponse
   ShopName      string   `json:"shop_name"`
   Region        string   `json:"region"`
   Status        string   `json:"status"`
@@ -293,12 +294,20 @@ type IResShopGetShopInfoDTO struct {
 } 
 
 // path : /api/v2/shop/get_profile
-type IResShopGetProfile struct {
-  ShopLogo    string `json:"shop_logo"`
-  Description string `json:"description"`
-  ShopName    string `json:"shop_name"`
-  InvoiceIssuer string  `json:"invoice_issuer"`
+type IResShopGetProfile_ResponseDTO struct {
+  ShopLogo      string `json:"shop_logo"`
+  Description   string `json:"description"`
+  ShopName      string `json:"shop_name"`
+  InvoiceIssuer string `json:"invoice_issuer"`
+
 }
 
+type IResShopGetProfileDTO struct {
+  IResShopeeResponse 
+  Resoponse IResShopGetProfile_ResponseDTO `json:"response"`
+}
+
+// [Rules] 
 // path : ***/***
-// type [IRes|IReq]:Table:Method
+// type [IRes|IReq]:Table:Method:DTO
+// 

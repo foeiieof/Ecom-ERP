@@ -43,6 +43,7 @@ type IReqShopeeAdapter struct {
   ShopID    string 
   SecretKey string
   Code *string
+  OrderSN []string
 }
 
 type IShopeeService interface {
@@ -58,11 +59,18 @@ type IShopeeService interface {
 	GetRefreshToken(partnerID string, shopID string, refreshToken string, signCode string) (*dto.IResShopeeAuthRefreshResponse, error)
 	// ExchangeToken(ctx context.Context, code string, redirectURI string, partnerID string) (*ShopeeAuthResponse, error)
 	GetShopByPartnerPublic(partnerID string, signCode string) (*dto.IResGetShopByPartnerPublic, error)
+
 	GetOrderListByShopID(partnerID string, accessToken string, shopID string, signCode string, optsShopee *dto.IOptionShopeeQuery) (*dto.IResGetOrderListByShopIDShop, error)
   GetOrderDetailByOrderSN(partnerID string, partnerKey string,accessToken string, shopID string, orderList []string, pending bool, option bool) (*dto.IResOrderDetailByOrderSN, error)
+  
+  // path : */api/v2/order/get_order_detail
+  GetOrderDetailListByOrderSN(ctx context.Context, params *IReqShopeeAdapter) ([]dto.IResOrderListWithDetails,error)
+
 
   // path : */api/v2/shop/get_profile 
-  GetShopProfile(ctx context.Context, params *IReqShopeeAdapter ) (*dto.IResShopGetProfile, error)  
+  GetShopProfile(ctx context.Context, params *IReqShopeeAdapter ) (*dto.IResShopGetProfile_ResponseDTO, error)  
+  // path : */api/v2/shop/get_shop_info
+  GetShopInfo(ctx context.Context, params *IReqShopeeAdapter) (*dto.IResShopGetShopInfoDTO ,error)
 }
 
 type shopeeApi struct {
@@ -129,41 +137,57 @@ func (s *shopeeApi) GenerateSignWithPathURL(state string, pathUrl string, partne
 	timest := strconv.FormatInt(time.Now().Unix(), 10)
 	path := fmt.Sprintf("%s", pathUrl)
 	// s.Logger.Sugar().Debugf("adapter.shopee.GenerateSignWithPathURL: %s", path)
-
 	var baseString string
+  var sign string
+  q := Url.Query()
+  q.Set("partner_id", partnerID)
+  q.Set("timestamp", timest)
 	// baseString := fmt.Sprintf("%s%s%s", partnerID, path, timest)
 	switch state {
 	case "PUBLIC":
 		// For Public APIs: partner_id, api path, timestamp
 		baseString = fmt.Sprintf("%s%s%s", partnerID, path, timest)
-		// break  // redundant
+	  h := hmac.New(sha256.New, []byte(partnerKey))
+	  h.Write([]byte(baseString))
+	  sign = hex.EncodeToString(h.Sum(nil))
+    // q.Set("sign", sign)
+
 	case "SHOP":
 		// For Shop APIs: partner_id, api path, timestamp, access_token, shop_id
-    s.Logger.Debug("adapter.GenerateSignWithPathURL.SHOP", zap.String("val", partnerID+path+timest+accessToken+shopID))
+    // s.Logger.Debug("adapter.GenerateSignWithPathURL.SHOP", zap.String("val", partnerID+path+timest+accessToken+shopID))
 		baseString = fmt.Sprintf("%s%s%s%s%s", partnerID, path, timest, accessToken, shopID)
-		// break
+	  h := hmac.New(sha256.New, []byte(partnerKey))
+	  h.Write([]byte(baseString))
+	  sign = hex.EncodeToString(h.Sum(nil))
+
+    // q.Set("sign", sign)
+    q.Set("shop_id", shopID)
+    q.Set("access_token", accessToken)
 
 	case "MERCHANT":
 		// Not available
 		// For Merchant APIs: partner_id, api path, timestamp, access_token, merchant_id
 		merchantID := ""
 		baseString = fmt.Sprintf("%s%s%s%s%s", partnerID, path, timest, accessToken, merchantID)
-		// break
+	  h := hmac.New(sha256.New, []byte(partnerKey))
+	  h.Write([]byte(baseString))
+	  sign = hex.EncodeToString(h.Sum(nil))
+
+    // q.Set("sign", sign)
+    q.Set("merchant_id", merchantID)
+    q.Set("access_token", accessToken)
+
 	default:
 		s.Logger.Error("adapter.shopee.GenerateSignWithPathURL: invalid state")
 		return nil, errors.New("adapter.shopee.GenerateSignWithPathURL: invalid state")
 	}
 
+  q.Set("sign", sign)
+  // Set query 
+  Url.RawQuery = q.Encode() 
 	// s.Logger.Sugar().Debugf("adapter.shopee.GenerateSignWithPathURL: baseString - %s", baseString)
-
-	h := hmac.New(sha256.New, []byte(partnerKey))
-	h.Write([]byte(baseString))
-	sign := hex.EncodeToString(h.Sum(nil))
-
-
   // s.Logger.Info("shopee.adapter.GenerateSignWithPathURL", zap.String("val", path))
 	switch path {
-
 
 	case "/api/v2/auth/token/get":
 		method = "GET"
@@ -178,6 +202,7 @@ func (s *shopeeApi) GenerateSignWithPathURL(state string, pathUrl string, partne
 	// break
 	// url = fmt.Sprintf("%s%s?partner_id=%s&timestamp=%s&sign=%s", host, path, partnerID, timest, sign)
 	case "/api/v2/order/get_order_list":
+
 		method = "GET"
 
   case "/api/v2/order/get_order_detail":
@@ -185,11 +210,14 @@ func (s *shopeeApi) GenerateSignWithPathURL(state string, pathUrl string, partne
 
   case "/api/v2/shop/get_profile":
     method = "GET"
+
+  case "/api/v2/shop/get_shop_info":
+    method = "GET"
     // url = fmt.Sprintf("%s%spartner_id=%s&timestamp=%s&sign=%s&shop_id=%s&access_token=%s", s.Config.Shopee.ShopeeApiBaseUrl,path,  ) 
 
 	default:
 		s.Logger.Error(`adapter.shopee.GenerateSignWithPathURL:invalid path `+ method)
-		return nil, errors.New("adapter.shopee.GenerateSignWithPathURL: invalid path")
+    return nil, errors.New("adapter.shopee.GenerateSignWithPathURL: invalid path" + method + ":" + path )
 	}
 
   Url.Path = path
@@ -470,7 +498,7 @@ func (s *shopeeApi) GetOrderListByShopID(partnerID string, accessToken string, s
 	}
 
 	queryString := q.Encode()
-	url := fmt.Sprintf("%s%s/order/get_order_list?%s", s.BaseURL, s.PrefixURL, queryString)
+	url := fmt.Sprintf("%s%s/order/get_order_list?%s&response_optional_fields=order_status", s.BaseURL, s.PrefixURL, queryString)
 	// s.logger.Debug("GetOrderListByShopID", zap.String("url", url))
 
 	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
@@ -493,7 +521,7 @@ func (s *shopeeApi) GetOrderListByShopID(partnerID string, accessToken string, s
 		return nil, err
 	}
 
-	s.Logger.Debug("adapter.GetOrderListByShopID.bodyBytes", zap.Any("bodyBytes", bodyBytes))
+	// s.Logger.Debug("adapter.GetOrderListByShopID.bodyBytes", zap.Any("bodyBytes", bodyBytes))
 
 	var resGetShopByPartnerPublic dto.IResGetOrderListByShopIDShop
 	if err := json.Unmarshal(bodyBytes, &resGetShopByPartnerPublic); err != nil {
@@ -510,14 +538,14 @@ func (s *shopeeApi) GetOrderListByShopID(partnerID string, accessToken string, s
 	//   resGetShopByPartnerPublic.OrderList = []dto.IResOrderList{}
 	// }
 
-	s.Logger.Debug("resGetShopByPartnerPublic", zap.Any("resGetShopByPartnerPublic", resGetShopByPartnerPublic))
+	// s.Logger.Debug("resGetShopByPartnerPublic", zap.Any("resGetShopByPartnerPublic", resGetShopByPartnerPublic))
 
 	return &resGetShopByPartnerPublic, nil
 }
 
 func (s *shopeeApi) GetOrderDetailByOrderSN(partnerID string, partnerKey string,accessToken string, shopID string, orderList []string, pending bool, option bool) (*dto.IResOrderDetailByOrderSN, error) {
 
-  genData,err := s.GenerateSignWithPathURL("SHOP", "/order/get_order_detail", partnerID, partnerKey, shopID, "", accessToken)
+  genData,err := s.GenerateSignWithPathURL("SHOP", "/api/v2/order/get_order_detail", partnerID, partnerKey, shopID, "", accessToken)
   if err != nil {
     s.Logger.Error("adapter.GetOrderDetailByOrderSN : s.GenerateSignWithPathURL error", zap.Error(err))
     return nil, err
@@ -559,7 +587,7 @@ func (s *shopeeApi) GetOrderDetailByOrderSN(partnerID string, partnerKey string,
 
 	url := fmt.Sprintf("%s%s/order/get_order_detail?%s", s.BaseURL, s.PrefixURL, queryString)
 
-	s.Logger.Debug("GetOrderListByShopID", zap.String("url", url))
+	// s.Logger.Debug("GetOrderListByShopID", zap.String("url", url))
 
 	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 	if err != nil {
@@ -581,7 +609,7 @@ func (s *shopeeApi) GetOrderDetailByOrderSN(partnerID string, partnerKey string,
 		return nil, err
 	}
 
-	s.Logger.Debug("adapter.GetOrderListByShopID.bodyBytes", zap.Any("bodyBytes", bodyBytes))
+	// s.Logger.Debug("adapter.GetOrderListByShopID.bodyBytes", zap.Any("bodyBytes", bodyBytes))
 
 	var resGetOrderDetailByOrderSN dto.IResOrderDetailByOrderSN
 	if err := json.Unmarshal(bodyBytes, &resGetOrderDetailByOrderSN); err != nil {
@@ -596,37 +624,80 @@ func (s *shopeeApi) GetOrderDetailByOrderSN(partnerID string, partnerKey string,
 		return nil, errors.New(resGetOrderDetailByOrderSN.Error)
 	}
 
-	s.Logger.Debug("resGetShopByPartnerPublic", zap.Any("resGetShopByPartnerPublic", resGetOrderDetailByOrderSN))
+	// s.Logger.Debug("resGetShopByPartnerPublic", zap.Any("resGetShopByPartnerPublic", resGetOrderDetailByOrderSN))
 
 	return &resGetOrderDetailByOrderSN, nil
 }
 
-func (s *shopeeApi)GetShopProfile(ctx context.Context, params *IReqShopeeAdapter ) (*dto.IResShopGetProfile, error)  {
+func (s *shopeeApi)GetOrderDetailListByOrderSN(ctx context.Context, params *IReqShopeeAdapter) ([]dto.IResOrderListWithDetails,error) {
+  state := "SHOP"
+  path  := "/api/v2/order/get_order_detail"
+  gen,err := s.GenerateSignWithPathURL(state, path, params.PartnerID, params.SecretKey, params.ShopID, "", params.AccessToken  )
+  if err != nil {
+    s.Logger.Debug("adapter.GetShopProfile", zap.Error(err))
+    return nil , err }
+
+  // cutomize url.Params
+
+  orderSNList := strings.Join(params.OrderSN, ",")
+
+  qUrl := gen.URL.Query()
+  qUrl.Set("order_sn_list", orderSNList)
+  optsQ := []string{
+    "total_amount",
+    "pending_terms", 
+    "buyer_username",
+    "recipient_address",
+    "dropshipper",
+    "dropshipper_phone",
+    "item_list", 
+    "package_list", 
+    "note", 
+  }
+  qUrl.Set("response_optional_fields", strings.Join(optsQ, ",")  )
+
+  gen.URL.RawQuery = qUrl.Encode()
+  // s.Logger.Debug("adapter.GetOrderDetailListByOrderSN", zap.String("cUrl", gen.URL.String()))
+
+  var resp *http.Response
+  resp, err = s.RequestHTTP(gen.Method, gen.URL.String(), nil)
+  if err != nil {
+    s.Logger.Debug("adapter.GetShopProfile.resp", zap.Error(err))
+    return nil,err}
+  defer resp.Body.Close()
+
+  bodyBytes,err := io.ReadAll(resp.Body)
+  if err != nil {
+    s.Logger.Debug("adapter.GetShopProfile.bodyBytes", zap.Error(err))
+    return nil, err
+  }
+
+  // s.Logger.Debug("adapter.GetShopeeProfile", zap.String("bodyBytes", string(bodyBytes) ))
+
+  var parse dto.IResOrderDetailByOrderSN
+  if err := json.Unmarshal(bodyBytes, &parse) ; err != nil { 
+    return nil, errors.New("invalidate parse bodyBytes in adapter") 
+  }
+  if parse.Error != "" {
+    return nil , errors.New(parse.Error)
+  }
+
+  // s.Logger.Debug("adapter.GetShopeeProfile", zap.Any("parse", parse.Response.OrderList))
+
+  return parse.Response.OrderList, nil
+}
+
+func (s *shopeeApi)GetShopProfile(ctx context.Context, params *IReqShopeeAdapter ) (*dto.IResShopGetProfile_ResponseDTO, error)  {
   // 0. generate sign
   state := "SHOP"
-  // method := "GET"
   path  := "/api/v2/shop/get_profile"
   gen,err := s.GenerateSignWithPathURL(state, path, params.PartnerID, params.SecretKey, params.ShopID, "", params.AccessToken  )
   if err != nil {
-  s.Logger.Debug("adapter.GetShopProfile", zap.Error(err))
+    s.Logger.Debug("adapter.GetShopProfile", zap.Error(err))
     return nil , err }
 
-  // 1. generate BaseURL
-  q := gen.URL.Query()
-  q.Set("partner_id", params.PartnerID)
-  q.Set("timestamp", gen.TimeStamp)
-  q.Set("sign", gen.Sign)
-  q.Set("shop_id", params.ShopID)
-  q.Set("access_token", params.AccessToken)
-
-  s.Logger.Debug("adapter.GetShopProfile.q", zap.String("val", params.PartnerID+":"+params.SecretKey+":"+params.ShopID+":"+params.AccessToken) )
-
-  gen.URL.RawQuery = q.Encode()
-  fiUrl := gen.URL.String()
-
   var resp *http.Response
-
-  resp, err = s.RequestHTTP(gen.Method, fiUrl, nil)
+  resp, err = s.RequestHTTP(gen.Method, gen.URL.String(), nil)
   if err != nil {
     s.Logger.Debug("adapter.GetShopProfile.resp", zap.Error(err))
     return nil,err}
@@ -637,15 +708,50 @@ func (s *shopeeApi)GetShopProfile(ctx context.Context, params *IReqShopeeAdapter
     s.Logger.Debug("adapter.GetShopProfile.bodyBytes", zap.Error(err))
     return nil, err}
 
-  s.Logger.Info("adapter.GetShopeeProfile", zap.String("bodyBytes", string(bodyBytes) ))
+  // s.Logger.Info("adapter.GetShopeeProfile", zap.String("bodyBytes", string(bodyBytes) ))
 
-  var parse dto.IResShopGetProfile
-
+  var parse dto.IResShopGetProfileDTO
   if err := json.Unmarshal(bodyBytes, &parse) ; err != nil { return nil, errors.New("invalidate parse bodyBytes") }
+  if parse.Error != "" {
+    return nil , errors.New(parse.Error)
+  }
 
-  return &parse, nil 
+  // s.Logger.Info("adapter.GetShopeeProfile", zap.Any("parse", parse) )
+
+  // parse to Entity 
+  return &parse.Resoponse, nil 
 }
 
+func (s *shopeeApi)GetShopInfo(ctx context.Context, params *IReqShopeeAdapter) (*dto.IResShopGetShopInfoDTO ,error) {
+  // 0. generate sign
+  state := "SHOP"
+  path  := "/api/v2/shop/get_shop_info"
+  gen,err := s.GenerateSignWithPathURL(state, path, params.PartnerID, params.SecretKey, params.ShopID, "", params.AccessToken  )
+  if err != nil {
+    s.Logger.Debug("adapter.GetShopInfo", zap.Error(err))
+    return nil , err }
+
+  var resp *http.Response
+  resp, err = s.RequestHTTP(gen.Method, gen.URL.String(), nil)
+  if err != nil {
+    s.Logger.Debug("adapter.GetShopInfo.resp", zap.Error(err))
+    return nil,err}
+  defer resp.Body.Close()
+
+  bodyBytes,err := io.ReadAll(resp.Body)
+  if err != nil {
+    s.Logger.Debug("adapter.GetShopInfo.bodyBytes", zap.Error(err))
+    return nil, err}
+
+  // s.Logger.Info("adapter.GetShopeeInfo", zap.String("bodyBytes", string(bodyBytes) ))
+  var parse dto.IResShopGetShopInfoDTO
+  if err := json.Unmarshal(bodyBytes, &parse) ; err != nil { return nil, errors.New("invalidate parse bodyBytes") }
+  if parse.Error != "" { return nil , errors.New(parse.Error) }
+
+  // s.Logger.Info("adapter.GetShopInfo", zap.Any("parse", parse) )
+  // parse to Entity 
+  return &parse, nil 
+}
 
 // ------------------------------------ Demo template -----------------------------------
 // Method:Service:Type

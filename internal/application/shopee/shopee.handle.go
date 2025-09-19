@@ -212,11 +212,11 @@ func (d *shopeeHandler) GetShopeeOrderListByShopID(c *fiber.Ctx) error {
 	// d.logger.Debug("time end day in unix", zap.String("timstamp", strconv.FormatInt( time.Now().Truncate(24*time.Hour).Add(23 * time.Hour + 59* time.Minute + 59*time.Second).Unix(),10) ) )
 
 	// check access and refresh
-	_, err := d.ShopeeService.GetAccessTokenByShopID(c.Context(),shopID)
-	if err != nil {
-		d.Logger.Error("handle.GetShopeeOrderListByShopID : d.service.GetAccessToken :", zap.Error(err))
-		return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error())
-	}
+	// _, err := d.ShopeeService.GetAccessTokenByShopID(c.Context(),shopID)
+	// if err != nil {
+	// 	d.Logger.Error("handle.GetShopeeOrderListByShopID : d.service.GetAccessToken :", zap.Error(err))
+	// 	return response.ErrorResponse(c, fiber.StatusNotFound, "ShopId no found", err.Error())
+	// }
 
 	// Valid section
 	var queries IReqQueryShopeeOrderListByShopID
@@ -234,16 +234,22 @@ func (d *shopeeHandler) GetShopeeOrderListByShopID(c *fiber.Ctx) error {
 		d.Logger.Error("handle.GetShopeeOrderListByShopID : d.service.GetShopeeOrderListByShopID :", zap.Error(err))
 		return response.ErrorResponse(c, fiber.StatusNotFound, "usecase.GetShopeeOrderListByShopID :", err.Error())
 	}
-	d.Logger.Debug("shopeeHandle.GetShopeeOrderListByShopID", zap.Any("data", data))
+	// d.Logger.Debug("shopeeHandle.GetShopeeOrderListByShopID", zap.Any("data", data))
 
 	// GetOrderListByShopID
-	return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopID", data)
+	return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopID", data.OrderList)
 }
 
 func (d *shopeeHandler)GetShopeeShopDetails(c *fiber.Ctx) error {
   shopID := c.Params("shopeeShopID")
+  userName,ok := c.Locals("username").(string)
+  if !ok {
+   return response.ErrorResponse(c,fiber.StatusUnauthorized, "handler.GetShopDetails", "unaurthorize")
+  }
 
-  res,err := d.ShopeeService.GetShopeeShopDetailsByShopID(c.Context(), shopID)
+  // d.Logger.Debug("handler.GetShopeeShopDetailsByShopID", zap.String("userName", userName))
+
+  res,err := d.ShopeeService.GetShopeeShopDetailsByShopID(c.Context(), userName ,shopID)
   if err != nil { return response.ErrorResponse(c, fiber.StatusConflict,"handler.GetShopeeShopDetails" ,err) }
 
   return response.SuccessResponse(c, "handle.GetShopeeShopDetails", res)
@@ -256,8 +262,8 @@ func (d *shopeeHandler) GetShopeeOrderDetailsByShopIDAndOrderSN(c *fiber.Ctx) er
 
 	missing := []string{}
 
-	if orderSNParam == "" { missing = append(missing, "orderSN") }
   if shopIDParam == "" { missing = append(missing, "shopID")    } 
+	if orderSNParam == "" { missing = append(missing, "orderSN") }
   if len(missing) > 0 {
 		return response.ErrorResponse(c, fiber.StatusBadRequest, "shopeeHandle.GetShopeeOrderListByShopSN", fmt.Sprintf("%s is required", missing[0]) )
   } 
@@ -271,13 +277,13 @@ func (d *shopeeHandler) GetShopeeOrderDetailsByShopIDAndOrderSN(c *fiber.Ctx) er
 		return response.ErrorResponse(c, fiber.StatusNotFound, "usecase.GetShopeeOrderDetailByShopID :", err.Error())
 	}
 
-	d.Logger.Debug("shopeeHandle.GetShopeeOrderListByShopSN", zap.Any("data", data))
+	// d.Logger.Debug("shopeeHandle.GetShopeeOrderListByShopSN", zap.Any("data", data.OrderList))
 
 	// res := orderParams + pendingQuery + optionQuery
 
   // Test 
   // return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopSN", fmt.Sprintf("%s*-*%s", shopIDParam,orderSNParam ))
-	return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopSN", data)
+	return response.SuccessResponse(c, "shopeeHandle.GetShopeeOrderListByShopSN", data.OrderList)
 }
 
 // ------------------------------------------------- Template -------------------------------------------------------

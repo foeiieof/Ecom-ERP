@@ -8,8 +8,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
-	"go.uber.org/zap"
+	"go.mongodb.org/mongo-driver/v2/mongo/options" 
+  "go.uber.org/zap"
 )
 
 // -- ShopeeAuthRepository
@@ -189,9 +189,9 @@ func (r *shopeeAuthRequestRepo) SaveShopeeAuthRequestWithName(partnerId string, 
 // -- user : ShopeeShopDetailsModel, ShopeeShopProfileModel 
 type ShopeeShopDetailsRepository interface {
   InitRepository() error
-  CreateShopeeShopDetails(ctx context.Context, ) error
-  // GetAllShopeeShopDetails() error
-  // GetShopeeShopDetailsById(ctx context.Context) error
+  CreateShopeeShopDetails(ctx context.Context, shop *ShopeeShopDetailsEntityDTO) (*ShopeeShopDetailsEntityDTO,error)
+  GetAllShopeeShopDetails(ctx context.Context) ([]ShopeeShopDetailsEntityDTO, error)
+  GetShopeeShopDetailsByShopID(ctx context.Context, shopID string)(*ShopeeShopDetailsEntityDTO, error) 
   // UpdateShopeeShopDetails(ctx context.Context) error
   // DeleteShopeeShopDetails(ctx context.Context) error
 }
@@ -220,10 +220,128 @@ func (r *shopeeShopDetailsRepo) InitRepository() error {
   return nil
 }
 
-func (r *shopeeShopDetailsRepo)CreateShopeeShopDetails(ctx context.Context) error {
-  return nil
+func (r *shopeeShopDetailsRepo) CreateShopeeShopDetails(ctx context.Context, shop *ShopeeShopDetailsEntityDTO) (*ShopeeShopDetailsEntityDTO,error){
+  // 0 convert to model
+  object := ShopeeShopEntityToModel(*shop)
+  // 1. insert to db
+  res,err := r.DB.InsertOne(ctx, object)
+  if err != nil {
+    if errors.Is(err, mongo.ErrNoDocuments){
+      return nil, errors.New("duplicate ShopID")
+    }
+    return nil, err }
+  // for normal string in _id 
+  if  oid, ok := res.InsertedID.(bson.ObjectID) ; !ok { object.ID = oid }
+  // 2. convert to entity
+  objParse := ShopeeShopModelToEntity(object)
+  return objParse,nil
 }
 
+func (r *shopeeShopDetailsRepo)GetAllShopeeShopDetails(ctx context.Context) ([]ShopeeShopDetailsEntityDTO, error) {
+
+  var models []ShopeeShopDetailsModel
+
+  cursor,err := r.DB.Find(ctx, bson.M{})
+  if err != nil { return nil, err}
+  defer cursor.Close(ctx)
+
+  if err := cursor.All(ctx,&models); err != nil { return nil, err}
+
+  resModels := make([]ShopeeShopDetailsEntityDTO, len(models))
+  for i,u := range models {
+    resModels[i] = *ShopeeShopModelToEntity(&u)
+  }
+
+  return resModels, nil
+} 
+
+func (r *shopeeShopDetailsRepo)GetShopeeShopDetailsByShopID(ctx context.Context, shopID string)(*ShopeeShopDetailsEntityDTO, error) {
+  var model ShopeeShopDetailsModel
+  filter := bson.M{ "shop_id": shopID}
+
+  err := r.DB.FindOne(ctx, filter).Decode(&model)
+  if err != nil {
+    if errors.Is(err, mongo.ErrNoDocuments) {
+      return nil, errors.New("ShopID not found")
+    }
+    return nil, err
+  }
+
+  // parse Model -> DTO
+  modelParse := ShopeeShopModelToEntity(&model)
+  return modelParse,nil
+}
+
+
+// ----------------- [Repository] - Start.Collection("shop_order") ----------------
+
+type ShopeeOrderRepository interface {
+  InitRepository() error
+  CrateShopeeOrderWithDetails(ctx context.Context, order *ShopeeOrderEntity) (*ShopeeOrderEntity,error)
+  GetShopeeOrderByOrderSN(ctx context.Context, orderSN string) (*ShopeeOrderEntity,error)
+}
+type shopeeOrderRepository struct {
+  Logger *zap.Logger
+  DB *mongo.Collection
+}
+func NewShopeeOrderRepository(db *mongo.Collection, log *zap.Logger) ShopeeOrderRepository {
+  return &shopeeOrderRepository{ Logger: log, DB: db, } 
+}
+
+func (r *shopeeOrderRepository)InitRepository() error {
+  indexs := []mongo.IndexModel{
+    {
+      Keys: bson.D{{ Key: "order_sn", Value: 1}},
+      Options: options.Index().SetUnique(true),
+    },
+  }
+
+  _,err := r.DB.Indexes().CreateMany(context.TODO(), indexs)
+  if err != nil { 
+    r.Logger.Error("error creating index", zap.Error(err))
+	  return errors.New("ShopeeOrderRepository.InitRepository: failed creating index InitRepository")
+  }
+	
+  r.Logger.Info("ShopeePartnerRepository.InitRepository: index created");return nil
+}
+
+func (r *shopeeOrderRepository)CrateShopeeOrderWithDetails(ctx context.Context, order *ShopeeOrderEntity) (*ShopeeOrderEntity,error) {
+
+  orderModel := ShopeeOrderEntityToModel(order)
+  orderModel.CreatedAt = time.Now()
+  orderModel.UpdatedAt = time.Now()
+
+  res,err := r.DB.InsertOne(ctx,orderModel)
+  if err != nil { 
+    r.Logger.Debug("repo.ShopeeOrder.CreateShopeeOrderWithDetails", zap.String("res,err", err.Error()))
+    return nil , err
+  }
+  if oid, ok := res.InsertedID.(bson.ObjectID) ; !ok {
+    orderModel.ID = oid
+  }
+
+  orderEnti := ShopeeOrderModelToEntity(orderModel)
+
+  return orderEnti,nil
+}
+
+func (r *shopeeOrderRepository)GetShopeeOrderByOrderSN(ctx context.Context, orderSN string) (*ShopeeOrderEntity,error) {
+
+  var order ShopeeOrderModel
+  filter := bson.M{"order_sn": orderSN}
+  err := r.DB.FindOne(ctx,filter).Decode(&order)
+  if err != nil {
+    if errors.Is(err, mongo.ErrNoDocuments){
+      return nil, errors.New("OrderSN not found")
+    }
+    return nil, err
+  }
+  // parse to Entity
+  entity := ShopeeOrderModelToEntity(&order)
+  return entity,nil 
+}
+
+// ----------------- [Repository] - End.Collection("shop_order") ----------------
 
 
 // -- ShopeePartnerRepository
@@ -382,6 +500,10 @@ func (r *shopeeShopDetailsRepo)CreateShopeeShopDetails(ctx context.Context) erro
 // // func (r *shopeePartnerRepo) Method() error {)
 
 
+// ----------------- [Repository/usecase/Handler] - Start.Collection("Shop_rder") ----------------
+
+// ----------------- [Repository/usecase/Handler] - End.Collection("Shop_rder") ----------------
+
 // ------------------------------- Repository Template ----------------------------------------------------------
 // type ShopeePartnerRepository interface {
 //   Method() error
@@ -393,3 +515,4 @@ func (r *shopeeShopDetailsRepo)CreateShopeeShopDetails(ctx context.Context) erro
 // func NewShopeePartnerRepository(db *mongo.Collection, log *zap.Logger) ShopeePartnerRepository {}
 // func (r *shopeePartnerRepo) Method() error {)
 // ------------------------------- End Repository Template -------------------------------------------------------
+

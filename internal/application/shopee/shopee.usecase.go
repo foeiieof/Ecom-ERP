@@ -33,7 +33,7 @@ type IShopeeService interface {
 
 	AddShopeeAuthRequest(ctx context.Context,partnerId string, partnerKey string, partnerName string, url string) (*ShopeeAuthRequestModel, error)
 	// AddShopeePartner(ctx context.Context,partnerId string, partnerKey string, partnerName string) (*ShopeePartnerModel, error)
-  GetShopeeShopDetailsByShopID(ctx context.Context, shopID string) ( *ShopeeShopDetailsDTO,error)
+  GetShopeeShopDetailsByShopID(ctx context.Context, user string ,shopID string) ( *ShopeeShopDetailsEntityDTO,error)
 	GetShopeeShopListByPartnerID(ctx context.Context,partnerID string) (*[]IResShopeeShopList, error)
 
 	// order
@@ -51,12 +51,16 @@ type shopeeService struct {
 	ShopeeAuthRepository        ShopeeAuthRepository // for Collect shopee shop may contains (access token , refresh token , ...other)
 	ShopeeAuthRequestRepository ShopeeAuthRequestRepository
 	ShopeePartnerRepository     partner.ShopeePartnerRepository
+  ShopeeShopDetailsRepository ShopeeShopDetailsRepository
+  ShopeeOrderRepository       ShopeeOrderRepository
 }
 
 func NewShopeeService(cfg *env.Config, logger *zap.Logger, adapter adapter.IShopeeService,
-	auth ShopeeAuthRepository,
+	auth    ShopeeAuthRepository,
 	authReq ShopeeAuthRequestRepository,
 	shopeePartner partner.ShopeePartnerRepository,
+  shopeeShop  ShopeeShopDetailsRepository,
+  shopeeOrder ShopeeOrderRepository,
 ) IShopeeService {
 	return &shopeeService{
 		Config:                      cfg,
@@ -65,6 +69,8 @@ func NewShopeeService(cfg *env.Config, logger *zap.Logger, adapter adapter.IShop
 		ShopeeAuthRepository:        auth,
 		ShopeeAuthRequestRepository: authReq,
 		ShopeePartnerRepository:     shopeePartner,
+    ShopeeShopDetailsRepository: shopeeShop,
+    ShopeeOrderRepository:       shopeeOrder,
 	}
 }
 
@@ -135,7 +141,7 @@ func (s *shopeeService) GetRefreshTokenOnAdapter(ctx context.Context,partnerID s
 	}
 	// update refresh token
 	// req to access token
-	// update access token
+// update access token
 	// updateShopeeShopAuth.AccessToken, nil
 	return &ShopeeAuthEntity{
 		PartnerID:    updated.PartnerID,
@@ -352,27 +358,99 @@ func (s *shopeeService) CreateAccessAndRefreshTokenByCodeOnAdapter(ctx context.C
 	// url := fmt.Sprintf("%s%s?partner_id=%s&timestamp=%s&sign=%s&redirect=%s", host, path, partnerId, timest, sign, redirectUrl)
 }
 
-type ShopeeShopDetailsDTO struct {
 
-} 
-
-func (s *shopeeService)GetShopeeShopDetailsByShopID(ctx context.Context, shopID string) ( *ShopeeShopDetailsDTO,error) {
-
+func (s *shopeeService)GetShopeeShopDetailsByShopID(ctx context.Context, user string,shopID string) ( *ShopeeShopDetailsEntityDTO,error) {
   // 0. check in db
-
   shop,err := s.ShopeeAuthRepository.GetShopeeShopAuthByShopId(shopID)
   if err != nil { return nil ,err}
-
   partner,err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shop.PartnerID)
+  if err != nil { return nil,err}
 
   // 1. get from adapter 
   params := &adapter.IReqShopeeAdapter{ PartnerID: partner.PartnerID, AccessToken: shop.AccessToken, ShopID: shopID, SecretKey: partner.SecretKey, }
-  _,err = s.ShopeeAdapter.GetShopProfile(ctx, params)
+  
+  dto, err := s.ShopeeShopDetailsRepository.GetShopeeShopDetailsByShopID(ctx, shop.ShopID)
+  if err != nil {
+    s.Logger.Info("usecase.GetShopeeShopDetailsByShopID", zap.String("val","fetch on adapter"))
+    // then dto -> Entity
+    // refactoring : go routine 
+    obj,err := s.ShopeeAdapter.GetShopProfile(ctx, params)
+    if err != nil { return nil, err}
 
-  // 2. save to DB
+    objOpts, err := s.ShopeeAdapter.GetShopInfo(ctx, params)
+    if err != nil { return nil, err}
+    // 2. Create obj
+    // not found then create new one
+    // 4. save to DB
 
+    var sifAffs []SipAffiShops_Struct
+    var linkShops []LinkedDirectShopList_Struct
+    var outletShops []OutletShopInfoList_Struct
 
-  return nil,nil
+    if len(objOpts.SipAffiShops) > 0 {
+      for _,o := range objOpts.SipAffiShops {
+        sifAffs = append(sifAffs, SipAffiShops_Struct{
+          AffiShopID: strconv.FormatInt(int64(o.AffiShopID),10),
+          Region: o.Region, 
+        })
+      }
+    }
+
+    if len(objOpts.LinkedDirectShopList) > 0 {
+      for _,o := range objOpts.LinkedDirectShopList {
+        linkShops = append(linkShops, LinkedDirectShopList_Struct{
+          DirectShopID: strconv.FormatInt(int64(o.DirectShopID),10),
+          DirectShopRegion: o.DirectShopRegion,
+        })
+      }
+    }
+
+    if len(objOpts.OutletShopInfoList) > 0 {
+      for _,o := range objOpts.OutletShopInfoList {
+        outletShops = append(outletShops, OutletShopInfoList_Struct{
+          OutletShopID: strconv.FormatInt(int64(o.OutletShopID),10),
+        })
+      }
+    }
+
+    objShopeeShop := ShopeeShopDetailsEntityDTO{
+      ShopID: shop.ShopID,
+      ShopLogo: obj.ShopLogo,
+      Description: obj.Description,
+      ShopName: obj.ShopName,
+      InvoiceIssuer: obj.InvoiceIssuer,
+
+      Region: objOpts.Region,
+      Status: ShopeeShopStatusEnum(objOpts.Status),
+      SipAffiShops: sifAffs,
+      IsCB: objOpts.IsCB,
+      IsSip: objOpts.IsSip,
+      IsUpgradedCBSC: objOpts.ISUpgradedCBSC,
+      MerchantID: strconv.FormatInt(int64(objOpts.MerchantID),10),
+      ShopFullFilmentFlag: ShopFullFilmentFlagEnum(objOpts.ShopFullFilmentFlag),
+      IsMainShop: objOpts.IsMainShop,
+      IsDirectShop: objOpts.IsDirectShop,
+      LinkedMainShopID: strconv.FormatInt(int64(objOpts.LinkedMainShopID),10),
+      LinkedDirectShopList: linkShops,
+      IsOneAwb: objOpts.IsOneAwb,
+      IsMartShop: objOpts.IsMartShop,
+      IsOutletShop: objOpts.IsOutletShop,
+      MartShopID: strconv.FormatInt(int64(objOpts.MartShopID), 10),
+      OutletShopInfoList: outletShops,
+
+      CreatedAt: time.Now(),
+      CreatedBy: user,
+      UpdatedAt: time.Now(),
+      UpdatedBy: user,
+    }
+    dto, err := s.ShopeeShopDetailsRepository.CreateShopeeShopDetails(ctx, &objShopeeShop)
+    if err != nil { return nil, err}
+    return dto, nil
+  }
+
+  // 5. onvert to DTO
+  // bc: both sane  Entity<->DTO 
+  return dto,nil
 } 
 
 type IResShopeeShopList struct {
@@ -442,19 +520,24 @@ func (s *shopeeService) GetShopeeOrderListByShopID(ctx context.Context,shopID st
 	// 	return nil, err
 	// }
 
-  // accessToken
-  shopData,err := s.GetAccessTokenByShopID(ctx,shopID)
-  if err != nil {
-    s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.GetAccessTokenByShopID error", zap.Error(err))
-    return nil, err
+
+  // accessToken if expired then send refresh_token to update access token
+  // !!dont delete marktime : 4/09/2025,10:24 !!
+  // shopData,err := s.GetAccessTokenByShopID(ctx,shopID)
+  // if err != nil {
+  //   s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.GetAccessTokenByShopID error", zap.Error(err))
+  //   return nil, err
+  // }
+
+  // 0. check in db
+  shopData,err := s.ShopeeAuthRepository.GetShopeeShopAuthByShopId(shopID)
+  if err != nil { return nil ,err}
+  partnerData,err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shopData.PartnerID)
+  if err != nil { 
+		s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeePartnerRepository.GetShopeePartnerByPartnerId error", zap.Error(err))
+    return nil,err
   }
 
-
-	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shopData.PartnerID)
-	if err != nil {
-		s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeePartnerRepository.GetShopeePartnerByPartnerId error", zap.Error(err))
-		return nil, err
-	}
 
 	//  ----------- set concurrent
 	genData, err := s.GenerateSignWithPathURL(ctx,"SHOP", "/order/get_order_list", partnerData.PartnerID, partnerData.SecretKey, shopData.ShopID, "", shopData.AccessToken)
@@ -496,10 +579,214 @@ func (s *shopeeService) GetShopeeOrderListByShopID(ctx context.Context,shopID st
 	if err != nil { return nil, err }
   s.Logger.Debug("orderData", zap.Any("orderData", orderData))
 
-	orderList := &ShopeeOrderListEntity{OrderList: orderData.Response.OrderList}
+  // test section available to delete
+  // orderSN := [2]string{"string", "string"}
+
+  orderSN := []string{} // slices
+  if len(orderData.Response.OrderList) > 0 {
+    for _,o := range orderData.Response.OrderList {
+      orderSN = append(orderSN, o.OrderSN)
+    }
+  }
+
+  params := &adapter.IReqShopeeAdapter{
+    PartnerID: partnerData.PartnerID,
+    AccessToken: shopData.AccessToken,
+    ShopID: shopData.ShopID,
+    SecretKey: partnerData.SecretKey,
+    OrderSN:orderSN,
+  }
+
+  // GetOrderDetails
+  orderDetails,err := s.ShopeeAdapter.GetOrderDetailListByOrderSN(ctx, params)
+  if err != nil { return nil,err}
+  // s.Logger.Debug("usecase.GetShopOrderListByShopID", zap.Any("orderDetails", orderDetails))
+
+
+  // create map for lookup in orderDetails\
+  orderDetailsMap := make(map[string]dto.IResOrderListWithDetails, len(orderDetails))
+  for _,d := range orderDetails {
+    orderDetailsMap[d.OrderSN] = d
+  }
+
+  // Create new OrderDetails  
+  var orderComps []ShopeeOrderEntity
+  if len(orderSN) > 0 {
+    for _,o := range orderSN {
+      // declared 
+      details := orderDetailsMap[o]
+
+      // RecipientAddress 
+      recipient := ShopeeRecipientAddressEntity{
+            Name: details.RecipientAddress.Name,
+            Phone: details.RecipientAddress.Phone,
+            Town: details.RecipientAddress.Town,
+            District: details.RecipientAddress.District,
+            City: details.RecipientAddress.City,
+            State: details.RecipientAddress.State,
+            Region: details.RecipientAddress.Region,
+            ZipCode: details.RecipientAddress.Zipcode,
+            FullAddress: details.RecipientAddress.FullAddress,
+      }
+      // check item list
+  
+      var items []ShopeeItemListEntity
+      for _,i := range details.ItemList {
+        items = append(items,ShopeeItemListEntity{
+          ItemID: strconv.FormatInt(i.ItemID, 10),
+          ItemName: i.ItemName,
+          ItemSKU: i.ItemSKU,
+          ModelID: strconv.FormatInt(i.ModelID, 10),
+          ModelName: i.ModelName,
+          ModelSKU: i.ModelSKU,
+          ModelQualityPurchased: i.ModelQtyPurchased,
+          ModelOriginPrice: i.ModelOriginalPrice,
+          ModelDiscountedPrice: i.ModelDiscountedPrice,
+          WholeSale: i.Wholesale,
+          Weight: i.Weight,
+          AddOnDeal: i.AddOnDeal,
+          PromotionType: ShopeePromotionTypeEnum(i.PromotionType),
+          PromotionID: strconv.FormatInt(i.PromotionID,10),
+          OrderItemID: strconv.FormatInt(i.OrderItemID,10),
+          PromotionGroupID: strconv.FormatInt(int64(i.PromotionGroupID), 10),
+          ImageInfo: ShopeeImageInfoEntity{ImageURL: i.ImageInfo.ImageURL},
+          ProductLocationID: i.ProductLocationID,
+          IsPrescriptionItem: i.IsPrescriptionItem,
+          IsB2COwnedItem: i.IsB2COwnedItem,
+        } )
+      } 
+
+      var packages []ShopeePackageListEntity
+      for _,p :=  range details.PackageList {
+
+        var itemInPackage []ShopeeItemListInPackageListEntity 
+        for _, iip := range p.ItemList {
+          itemInPackage = append(itemInPackage, ShopeeItemListInPackageListEntity{
+            ItemID: strconv.FormatInt(iip.ItemID,10),
+            ModelID:strconv.FormatInt(iip.ModelID,10) ,
+            ModelQuantity: iip.ModelQuantity,
+            OrderItemID: strconv.FormatInt(iip.OrderItemID,10),
+            PromotionGroupID: strconv.FormatInt(int64(iip.PromotionGroupID),10) ,
+            ProductLocationID: iip.ProductLocationID,
+          })
+        }
+
+        packages = append(packages, ShopeePackageListEntity{
+          PackageNumber: p.PackageNumber,
+          LogisticsStatus: p.LogisticsStatus,
+          LogisticsChannelID: strconv.FormatInt(p.LogisticsChannelID, 10),
+          ShippingCarrier: p.ShippingCarrier,
+          AllowSelfDesignAWB: p.AllowSelfDesignAWB,
+          ItemList: itemInPackage,
+          ParcelChargeableWeight: p.ParcelChargeableWeight,
+          GroupShipmentID: p.SortingGroup,
+        })
+      }
+
+
+      // check before  create entity
+      order := ShopeeOrderEntity{
+        OrderSN: o,
+        OrderStatus: ShopeeOrderStatusEnum(details.OrderStatus),
+        BookingSN: details.BookingSN,
+        ShopeeOrderDetailsEntity: ShopeeOrderDetailsEntity{
+          Region: details.Region,
+          Currency: details.Currency,
+          Cod: details.COD,
+          TotalAmount: details.TotalAmount,
+          PendingTerms: details.PendingTerms,
+
+          ShippingCarrier: details.ShippingCarrier,
+          PaymentMethod: details.PaymentMethod,
+          EstimatedShippingFee: details.EstimatedShippingFee,
+          MessageToSeller: details.MessageToSeller,
+          CreateTime: time.Unix(details.CreateTime, 0),
+          UpdateTime: time.Unix(details.UpdateTime, 0),
+          DaysToShip: details.DaysToShip,
+          ShipByDate: int(details.ShipByDate),
+          BuyerUserId: strconv.FormatInt(int64(details.BuyerUserID),10),
+          BuyerUsername: details.BuyerUsername,
+          RecipientAddress: recipient,
+          ActualShippingFee: details.ActualShippingFee,
+          GoodsToDeclare: details.GoodsToDeclare,
+          Note: details.Note,
+          NoteUpdateTime: time.Unix(details.NoteUpdateTime,0),
+
+          ItemList: items,
+
+          PayTime: time.Unix(details.PayTime,0),
+          DropShipper: details.Dropshipper,
+          DropShipperPhone: details.DropshipperPhone,
+          SplitUp: details.SplitUp,
+          BuyerCancelReason: details.BuyerCancelReason,
+          CancelBy: details.CancelBy,
+          CancelReason: details.CancelReason,
+          ActualShippingFeeConfirmed: details.ActualShippingFeeConfirmed,
+
+          BuyerCPFID: details.BuyerCPFID,
+          FulFillmentFlag: ShopeeFulfillmentFlagEnum(details.FulfillmentFlag),
+          PickupDoneTime: time.Unix(details.PickupDoneTime,0),
+          PackageList:packages ,
+          InvoiceData: ShopeeInvoiceDataEntity{
+            Number: details.InvoiceData.Number,
+            SeriesNumber: details.InvoiceData.SeriesNumber,
+            AccessKey: details.InvoiceData.AccessKey,
+            IssueDate: time.Unix(details.InvoiceData.IssueDate,0),
+            TotalValue: details.InvoiceData.TotalValue,
+            ProductTotalValue: details.InvoiceData.ProductsTotalValue,
+            TaxCode: details.InvoiceData.TaxCode,
+          },
+
+          CheckoutShippingCarrier: details.CheckoutShippingCarrier,
+          ReverseShippingFee: details.ReverseShippingFee,
+          OrderChargeableWeightGram: details.OrderChargeableWeight,
+          PrescriptionImages: details.PrescriptionImages,
+          PrescriptionCheckStatus: ShopeePrescriptionCheckStatusEnum(details.PrescriptionStatus),
+          BookingSN: details.BookingSN,
+          AdvancePackage: details.AdvancePackage,
+          ReturnRequestDueDate: time.Unix (details.ReturnRequestDueDate, 0),
+        },
+
+      }
+      orderComps = append(orderComps, order)
+    }
+  }
+
+  
+  // s.Logger.Debug("usecase.GetShopeeOrderListByShopID", zap.String("orderComps", strconv.FormatInt(int64(len(orderComps)), 10) ))
+
+  if len(orderComps) > 0 {
+    var newOrders []ShopeeOrderEntity
+
+    for _, order  := range orderComps {
+      if shopID != "" {
+      order.ShopID = shopID
+      }
+      // check before save to db
+      res,err := s.ShopeeOrderRepository.GetShopeeOrderByOrderSN(ctx, order.OrderSN)
+      if err != nil {
+      // save to DB with loop
+        res,err = s.ShopeeOrderRepository.CrateShopeeOrderWithDetails(ctx, &order) 
+        if err != nil {
+          s.Logger.Info("usecase.GetShopeeOrderListByShopID", zap.String("saveOrder", err.Error() )) 
+          continue
+        }
+      }
+      newOrders = append(newOrders, *res )
+    }
+
+    if len(newOrders) > 0 {
+      orderComps = newOrders
+    }
+  }
+
+
+  // s.Logger.Debug("usecase.GetShopeeOrderListByShopID", zap.Any("orderComp", orderComps))
+
+	orderList := &ShopeeOrderListEntity{OrderList: orderComps}
 
 	// return orderData, nil
-	return orderList, nil
+	return orderList , nil
 }
 
 
@@ -509,18 +796,28 @@ func (s *shopeeService) GetShopeeOrderDetailByOrderSN(ctx context.Context,shopID
 
   // accessToken
   // check shopID through GetAccessTokenByShopID 
-  shopData,err := s.GetAccessTokenByShopID(ctx,shopID)
-  if err != nil {
-    s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.GetAccessTokenByShopID error", zap.Error(err))
-    return nil, err
-  }
+ //  shopData,err := s.GetAccessTokenByShopID(ctx,shopID)
+ //  if err != nil {
+ //    s.Logger.Error("usecase.GetShopeeOrderDetailByOrderSN : s.GetAccessTokenByShopID error", zap.Error(err))
+ //    return nil, err
+ //  }
 
-	partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shopData.PartnerID)
-	if err != nil {
+	// partnerData, err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shopData.PartnerID)
+	// if err != nil {
+	// 	s.Logger.Error("usecase.GetShopeeOrderDetailByOrderSN : s.ShopeePartnerRepository.GetShopeePartnerByPartnerId error", zap.Error(err))
+	// 	return nil, err
+	// }
+
+
+  // 0. check in db
+  shopData,err := s.ShopeeAuthRepository.GetShopeeShopAuthByShopId(shopID)
+  if err != nil { return nil ,err}
+  partnerData,err := s.ShopeePartnerRepository.GetShopeePartnerByID(ctx,shopData.PartnerID)
+  if err != nil { 
 		s.Logger.Error("usecase.GetShopeeOrderListByShopID : s.ShopeePartnerRepository.GetShopeePartnerByPartnerId error", zap.Error(err))
-		return nil, err
-	}
-
+    return nil,err
+  }
+  // ------- 
   orderSNList := strings.Split(orderSN, ",")
   if len(orderSNList) < 1 {
     return nil, errors.New("orderSN is required")
@@ -540,7 +837,7 @@ func (s *shopeeService) GetShopeeOrderDetailByOrderSN(ctx context.Context,shopID
     partnerData.PartnerID, partnerData.SecretKey, shopData.AccessToken , shopData.ShopID, orderSNList, pendingOpts, optionOpts)
   if err != nil { return nil, err }
 
-  s.Logger.Debug("orderDetailData", zap.Any("orderDetailData", orderDetailData))
+  // s.Logger.Debug("orderDetailData", zap.Any("orderDetailData", orderDetailData))
 
   orderListWithDetail := &ShopeeOrderListWithDetailEntity{ OrderList: orderDetailData.Response.OrderList, }
 
